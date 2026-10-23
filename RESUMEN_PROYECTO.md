@@ -61,31 +61,27 @@ Gastito.Api -> Gastito.Presentation -> Gastito.BusinessLogic -> Gastito.DataAcce
 | **5** | Fijos | ✅ Completada | Movimientos recurrentes (mensuales), `FechaInicio` y `FechaFin`, sin cuotas, historial de montos (`HistorialMonto`), actualización con `aplicarDesde = MesActual | MesSiguiente`, ocurrencias mensuales en consultas. |
 | **6** | Cuotas | ✅ Completada | Gastos en cuotas (tarjeta de crédito), cálculo de valor de cuota con absorción de redondeo en la última cuota, inicialización de calendario de cuotas, `CuotaCalculator`, validaciones estrictas y protección de compras con pagos. |
 | **7** | Pendientes y adelantar | ✅ Completada | Endpoint `/api/v1/pendientes` con orden especificado (eventuales primero por monto desc, luego compras en cuotas que terminan en período, por cuotas pagadas desc y valor de cuota desc); botón "Adelantar" (`POST /movimientos/{id}/cuotas/adelantar`), corrimiento de calendario de cuotas e historial en `PagoCuota`. |
-| **8** | **Dashboard y Reportes** | ⏳ **SIGUIENTE FASE** | **Dashboard (`/api/v1/dashboard?meses=3`)** con totales del mes actual, monto pendiente, torta por categoría, gráfico de líneas de ingresos vs gastos (3 a 12 meses) y próximas deudas; **Reportes (`/api/v1/reportes/resumen`)** con filtros por rango de fechas y categorías. |
-| **9** | Calidad | ⏳ Pendiente | Middleware global de excepciones, logging con Serilog, tests adicionales. |
+| **8** | Dashboard y Reportes | ✅ Completada | **Dashboard (`/api/v1/dashboard?meses=3`)** con totales del mes actual, monto pendiente, torta por categoría, gráfico de líneas de ingresos vs gastos (3 a 12 meses) y próximas deudas; **Reportes (`/api/v1/reportes/resumen`)** con filtros por rango de fechas y categorías. |
+| **9** | **Calidad** | ⏳ **SIGUIENTE FASE** | **Middleware global de excepciones (RFC 7807 ProblemDetails)**, logging estructurado con Serilog, tests unitarios e integración adicionales con `WebApplicationFactory`. |
 | **10**| Dockerizar la API | ⏳ Pendiente | Dockerfile multi-stage y docker-compose completo (API + PostgreSQL). |
 | **11**| Telegram | ⏳ Pendiente | `TelegramBotService`, webhook, interacción mediante botones. |
 
 ---
 
-## 4. Guía Detallada para la Próxima Sesión: FASE 8 (Dashboard y Reportes)
+## 4. Guía Detallada para la Próxima Sesión: FASE 9 (Calidad)
 
-### Requerimientos de la Fase 8 (Secciones 3.9, 3.10, 9 y 10 del Documento de Decisiones):
-1. **Dashboard (`GET /api/v1/dashboard?meses=3`)**:
-   - Todo referido al mes actual (salvo gráfico de líneas):
-     - `TotalIngresos`: ingresos del mes actual.
-     - `TotalGastos`: gastos del mes actual (las cuotas cuentan solo la cuota del mes, fijos cuentan su valor en el mes).
-     - `MontoPendiente`: valor de las cuotas que vencen en el mes actual y aún no están pagadas.
-     - `GastosPorCategoria`: distribución para gráfico de torta (solo categorías de gasto con monto > 0 en el mes).
-     - `IngresosVsGastos`: serie histórica mes a mes (por defecto 3 meses contando el actual, filtro de 3 a 12 meses).
-     - `ProximasDeudas`: compras en cuotas con cuotas sin pagar, ordenadas según Pendientes:
-       `{ id, descripcion, categoria, cuotasPagadas, cantidadCuotas, valorCuota, mesProximaCuota }`.
-2. **Reportes (`GET /api/v1/reportes/resumen?desde&hasta&categoriaIds`)**:
-   - Filtros por rango de fechas y categorías (selección múltiple):
-     - `TotalIngresos` y `TotalGastos` del período.
-     - `GastosPorCategoria`: distribución por categoría para el período.
-     - `ProximasDeudas`: próximas deudas del período consultado.
-     - (Los movimientos detallados se consultan a través de `GET /api/v1/movimientos` con los mismos filtros).
+### Requerimientos de la Fase 9 (Secciones 8, 9, 10 y 12 del Documento de Decisiones):
+1. **Middleware Global de Excepciones**:
+   - Captura de `BusinessException` retornando HTTP 400 Bad Request en formato `ProblemDetails` RFC 7807 (`type`, `title`, `status`, `detail`, `instance`).
+   - Captura de excepciones no controladas retornando HTTP 500 Internal Server Error en formato `ProblemDetails` sin fugar stack traces en producción.
+   - Preservar consistencia de respuestas con `HttpValidationProblemDetails` generado por validaciones de FluentValidation.
+2. **Logging Estructurado con Serilog**:
+   - Configuración en `Program.cs` / `appsettings.json` con enriquecedores (`FromLogContext`, `WithMachineName`, `WithProcessId`).
+   - Salida estructurada a consola (y/o archivo según configuración).
+   - Sustituir logging por defecto con Serilog en pipeline ASP.NET Core (`UseSerilogRequestLogging`).
+3. **Tests de Integración con `WebApplicationFactory`**:
+   - Pruebas E2E de endpoints protegidos con autenticación JWT contra la API en memoria.
+   - Validación de respuestas `ProblemDetails` ante errores de negocio y errores 404/401/400.
 
 ---
 
@@ -101,14 +97,14 @@ dotnet build
 # Iniciar contenedor de base de datos PostgreSQL si se requiere
 docker compose up -d
 
-# Convención de ramas para la Fase 8:
-git checkout -b fase-8-dashboard-reportes
+# Convención de ramas para la Fase 9:
+git checkout -b fase-9-calidad
 # ... al terminar y verificar tests:
-git commit -m "Fase 8: Dashboard y Reportes - ..."
+git commit -m "Fase 9: Calidad - ..."
 git checkout main
-git merge fase-8-dashboard-reportes
+git merge fase-9-calidad
 ```
 
 ---
-*Última actualización: Cierre de Fase 7 (64/64 tests pasando).*
+*Última actualización: Cierre de Fase 8 (75/75 tests pasando).*
 

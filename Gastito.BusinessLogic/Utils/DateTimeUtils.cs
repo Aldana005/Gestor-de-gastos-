@@ -53,4 +53,10 @@ public static class DateTimeUtils
     {
         return GetStartOfMonthUtc(date).AddMonths(1);
     }
+
+    public static DateTime GetEndOfMonthUtc(DateTime date)
+    {
+        var days = DateTime.DaysInMonth(date.Year, date.Month);
+        return new DateTime(date.Year, date.Month, days, 23, 59, 59, DateTimeKind.Utc);
+    }
 }
