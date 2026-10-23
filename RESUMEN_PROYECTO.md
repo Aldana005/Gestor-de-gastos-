@@ -59,8 +59,8 @@ Gastito.Api -> Gastito.Presentation -> Gastito.BusinessLogic -> Gastito.DataAcce
 | **3** | Categorías y Tarjetas | ✅ Completada | CRUD completo, seed no editable/borrable, validación de no borrado si existen movimientos asociados. |
 | **4** | Movimientos básicos | ✅ Completada | CRUD en `/api/v1/movimientos`, paginación (`PagedResult`), filtros por fecha/tipo/categorías, medios de pago condicionales, validación de categoría por tipo, soft delete auditado. |
 | **5** | Fijos | ✅ Completada | Movimientos recurrentes (mensuales), `FechaInicio` y `FechaFin`, sin cuotas, historial de montos (`HistorialMonto`), actualización con `aplicarDesde = MesActual | MesSiguiente`, ocurrencias mensuales en consultas. |
-| **6** | **Cuotas** | ⏳ **SIGUIENTE FASE** | **Gastos en cuotas (tarjeta de crédito)**: alta de compras en cuotas, cálculo de valor de cuota con absorción de redondeo en la última cuota, inicialización de calendario de cuotas, cuotas restantes. |
-| **7** | Pendientes y adelantar | ⏳ Pendiente | Listado ordenado de deudas del período, botón "Adelantar", calendario corrido e historial en `PagoCuota`. |
+| **6** | Cuotas | ✅ Completada | Gastos en cuotas (tarjeta de crédito), cálculo de valor de cuota con absorción de redondeo en la última cuota, inicialización de calendario de cuotas, `CuotaCalculator`, validaciones estrictas y protección de compras con pagos. |
+| **7** | **Pendientes y adelantar** | ⏳ **SIGUIENTE FASE** | **Listado ordenado de deudas del período y adelantos**: endpoint `/api/v1/pendientes`, botón "Adelantar", corrimiento de calendario de cuotas restantes e historial en `PagoCuota`. |
 | **8** | Dashboard y Reportes | ⏳ Pendiente | Métricas del mes actual, gastos por categoría (torta), evolución de ingresos vs gastos (líneas 3 a 12 meses), reportes con filtros. |
 | **9** | Calidad | ⏳ Pendiente | Middleware global de excepciones, logging con Serilog, tests adicionales. |
 | **10**| Dockerizar la API | ⏳ Pendiente | Dockerfile multi-stage y docker-compose completo (API + PostgreSQL). |
@@ -68,26 +68,28 @@ Gastito.Api -> Gastito.Presentation -> Gastito.BusinessLogic -> Gastito.DataAcce
 
 ---
 
-## 4. Guía Detallada para la Próxima Sesión: FASE 6 (Cuotas)
+## 4. Guía Detallada para la Próxima Sesión: FASE 7 (Pendientes y adelantar)
 
-### Requerimientos de la Fase 6 (Secciones 3.5, 4.2 y 10 del Documento de Decisiones):
-1. **Entidad `Transaction`**:
-   - `MontoTotal`: decimal(18,2) obligatorio en cuotas.
-   - `CantidadCuotas`: entero mayor a 1 (`> 1`).
-   - `CuotasPagadas`: inicializado en 0.
-   - `FechaPrimeraCuota`: fecha calendario UTC 00:00:00 (por defecto igual a `Fecha`).
-   - `FechaPrimeraCuotaPendiente`: inicializado en `FechaPrimeraCuota`.
-   - `Monto`: en la creación, se almacena o calcula el valor de la cuota base o `MontoTotal`.
-2. **Reglas de Negocio y Validaciones**:
-   - Solo aplicable a gastos (`Tipo = TipoMovimiento.Gasto`).
-   - Solo compras eventuales (`Frecuencia = Frecuencia.Eventual`).
-   - Solo pagadas con tarjeta de crédito (`MedioPago = MedioPago.Tarjeta` y `Tarjeta.TipoTarjeta = TipoTarjeta.Credito`).
-   - `CantidadCuotas > 1`.
-   - Valor de cada cuota = `MontoTotal / CantidadCuotas`. La última cuota absorbe la diferencia de redondeo.
-   - Si una compra en cuotas ya tiene cuotas pagadas (`CuotasPagadas > 0`), no se pueden editar `MontoTotal` ni `CantidadCuotas`.
-3. **Endpoints y Contratos**:
-   - `POST /api/v1/movimientos`: aceptar `MontoTotal`, `CantidadCuotas`, `FechaPrimeraCuota`.
-   - `TransactionOutput`: incluir `MontoTotal`, `CantidadCuotas`, `CuotasPagadas`, `ValorCuota`, `FechaPrimeraCuota`, `FechaPrimeraCuotaPendiente`.
+### Requerimientos de la Fase 7 (Secciones 3.6, 3.7, 9 y 10 del Documento de Decisiones):
+1. **Adelantar Cuotas (`POST /api/v1/movimientos/{id}/cuotas/adelantar`)**:
+   - Pide `{ cantidad: int }` (mayor a 0 y no mayor a las cuotas restantes: `cantidad <= (CantidadCuotas - CuotasPagadas)`).
+   - Registra en `PagoCuota`: `TransactionId`, `CantidadCuotas`, `Monto`, `CuotaDesde`, `CuotaHasta`, `FechaPagoUtc`.
+   - Incrementa `CuotasPagadas += cantidad`.
+   - Corrimiento de calendario:
+     - La próxima cuota pendiente pasa al mes siguiente al del pago y las demás la siguen mes a mes.
+     - `FechaPrimeraCuotaPendiente` se actualiza con la fecha corrida.
+     - Caso borde: si lo adelantado no supera las cuotas que ya correspondían hasta el mes del pago, el calendario no cambia.
+2. **Historial de Pagos (`GET /api/v1/movimientos/{id}/cuotas/pagos`)**:
+   - Devuelve la lista de adelantos registrados en `PagoCuota` para ese movimiento.
+3. **Listado de Pendientes (`GET /api/v1/pendientes?desde&hasta&categoriaIds&montoMin&montoMax`)**:
+   - Gastos del período (rango de fechas por defecto: mes actual).
+   - Los movimientos fijos NO entran.
+   - Orden exacto según especificación:
+     1. Gastos eventuales sin cuotas, de mayor a menor monto.
+     2. Compras en cuotas:
+        a. Primero las que terminan dentro del rango (su última cuota cae en el período).
+        b. Después el resto, por cuotas pagadas de mayor a menor (ej.: 3/6 antes que 1/6).
+        c. En caso de empate, por valor de la cuota de mayor a menor.
 
 ---
 
@@ -103,13 +105,13 @@ dotnet build
 # Iniciar contenedor de base de datos PostgreSQL si se requiere
 docker compose up -d
 
-# Convención de ramas para la Fase 6:
-git checkout -b fase-6-cuotas
+# Convención de ramas para la Fase 7:
+git checkout -b fase-7-pendientes-adelantar
 # ... al terminar y verificar tests:
-git commit -m "Fase 6: Cuotas - ..."
+git commit -m "Fase 7: Pendientes y adelantar - ..."
 git checkout main
-git merge fase-6-cuotas
+git merge fase-7-pendientes-adelantar
 ```
 
 ---
-*Última actualización: Cierre de Fase 5 (51/51 tests pasando).*
+*Última actualización: Cierre de Fase 6 (58/58 tests pasando).*

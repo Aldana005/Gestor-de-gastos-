@@ -1,6 +1,7 @@
 using Gastito.DataAccess.Interfaces;
 using Gastito.Entities.Enums;
 using Gastito.Entities.Models;
+using Gastito.Entities.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace Gastito.DataAccess.Stores;
@@ -35,16 +36,6 @@ public class TransactionStore : ITransactionStore
             .Where(t => t.Frecuencia == Frecuencia.Eventual)
             .AsQueryable();
 
-        if (desdeUtc.HasValue)
-        {
-            eventualQuery = eventualQuery.Where(t => t.Fecha >= desdeUtc.Value);
-        }
-
-        if (hastaUtc.HasValue)
-        {
-            eventualQuery = eventualQuery.Where(t => t.Fecha <= hastaUtc.Value);
-        }
-
         if (tipo.HasValue)
         {
             eventualQuery = eventualQuery.Where(t => t.Tipo == tipo.Value);
@@ -55,7 +46,62 @@ public class TransactionStore : ITransactionStore
             eventualQuery = eventualQuery.Where(t => categoriaIds.Contains(t.CategoryId));
         }
 
-        var eventualItems = await eventualQuery.ToListAsync(ct);
+        var eventualRaw = await eventualQuery.ToListAsync(ct);
+        var eventualItems = new List<Transaction>();
+
+        foreach (var item in eventualRaw)
+        {
+            var tieneCuotas = item.CantidadCuotas.HasValue && item.CantidadCuotas.Value > 1 && item.MontoTotal.HasValue;
+            if (tieneCuotas && (desdeUtc.HasValue || hastaUtc.HasValue))
+            {
+                // En consultas con rango, proyectar la cuota que cae en el período (Sección 3.5 y 3.7)
+                var primeraCuota = item.FechaPrimeraCuota ?? item.Fecha;
+                for (int c = 1; c <= item.CantidadCuotas!.Value; c++)
+                {
+                    var fechaCuota = CuotaCalculator.CalcularFechaCuota(primeraCuota, c);
+                    var matchesRange = (!desdeUtc.HasValue || fechaCuota >= desdeUtc.Value) &&
+                                       (!hastaUtc.HasValue || fechaCuota <= hastaUtc.Value);
+                    if (matchesRange)
+                    {
+                        var montoCuota = CuotaCalculator.CalcularValorCuota(item.MontoTotal!.Value, item.CantidadCuotas.Value, c);
+                        eventualItems.Add(new Transaction
+                        {
+                            Id = item.Id,
+                            Tipo = item.Tipo,
+                            Frecuencia = item.Frecuencia,
+                            Monto = montoCuota,
+                            Moneda = item.Moneda,
+                            Fecha = fechaCuota,
+                            Descripcion = item.Descripcion,
+                            Notas = item.Notas,
+                            CategoryId = item.CategoryId,
+                            Category = item.Category,
+                            MedioPago = item.MedioPago,
+                            TarjetaId = item.TarjetaId,
+                            Tarjeta = item.Tarjeta,
+                            FechaInicio = item.FechaInicio,
+                            FechaFin = item.FechaFin,
+                            MontoTotal = item.MontoTotal,
+                            CantidadCuotas = item.CantidadCuotas,
+                            CuotasPagadas = item.CuotasPagadas,
+                            FechaPrimeraCuota = item.FechaPrimeraCuota,
+                            FechaPrimeraCuotaPendiente = item.FechaPrimeraCuotaPendiente,
+                            CreatedAtUtc = item.CreatedAtUtc,
+                            HistorialMontos = item.HistorialMontos
+                        });
+                    }
+                }
+            }
+            else
+            {
+                var matchesRange = (!desdeUtc.HasValue || item.Fecha >= desdeUtc.Value) &&
+                                   (!hastaUtc.HasValue || item.Fecha <= hastaUtc.Value);
+                if (matchesRange)
+                {
+                    eventualItems.Add(item);
+                }
+            }
+        }
 
         // 2. Movimientos Fijos (recurrentes: aparecen una vez por mes en el período activo)
         var fixedQuery = _context.Transactions

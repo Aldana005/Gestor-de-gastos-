@@ -4,6 +4,7 @@ using Gastito.BusinessLogic.Utils;
 using Gastito.DataAccess.Interfaces;
 using Gastito.Entities.Enums;
 using Gastito.Entities.Models;
+using Gastito.Entities.Utils;
 
 namespace Gastito.BusinessLogic.Managers;
 
@@ -78,11 +79,21 @@ public class TransactionManager : ITransactionManager
         // Si un gasto en cuotas ya tiene cuotas pagadas o adelantadas, no se pueden cambiar el monto total ni la cantidad de cuotas; solo descripción, categoría y notas.
         if ((existing.CuotasPagadas ?? 0) > 0)
         {
-            if (updatedData.Monto != existing.Monto ||
-                updatedData.MontoTotal != existing.MontoTotal ||
-                updatedData.CantidadCuotas != existing.CantidadCuotas)
+            var isCuota = existing.CantidadCuotas.HasValue && existing.CantidadCuotas.Value > 1;
+            if (isCuota)
             {
-                throw new BusinessException("No se puede modificar el monto total ni la cantidad de cuotas de una compra que ya tiene cuotas pagadas o adelantadas.");
+                if (updatedData.MontoTotal.HasValue && updatedData.MontoTotal.Value != existing.MontoTotal ||
+                    updatedData.CantidadCuotas.HasValue && updatedData.CantidadCuotas.Value != existing.CantidadCuotas)
+                {
+                    throw new BusinessException("No se puede modificar el monto total ni la cantidad de cuotas de una compra que ya tiene cuotas pagadas o adelantadas.");
+                }
+            }
+            else
+            {
+                if (updatedData.Monto != existing.Monto)
+                {
+                    throw new BusinessException("No se puede modificar el monto total ni la cantidad de cuotas de una compra que ya tiene cuotas pagadas o adelantadas.");
+                }
             }
         }
 
@@ -155,6 +166,16 @@ public class TransactionManager : ITransactionManager
         existing.FechaFin = updatedData.FechaFin;
         if (updatedData.MontoTotal.HasValue) existing.MontoTotal = updatedData.MontoTotal;
         if (updatedData.CantidadCuotas.HasValue) existing.CantidadCuotas = updatedData.CantidadCuotas;
+        if (updatedData.FechaPrimeraCuota.HasValue)
+        {
+            existing.FechaPrimeraCuota = DateTime.SpecifyKind(updatedData.FechaPrimeraCuota.Value.Date, DateTimeKind.Utc);
+            existing.FechaPrimeraCuotaPendiente ??= existing.FechaPrimeraCuota;
+        }
+
+        if (existing.CantidadCuotas.HasValue && existing.CantidadCuotas.Value > 1 && existing.MontoTotal.HasValue)
+        {
+            existing.Monto = CuotaCalculator.CalcularValorCuotaBase(existing.MontoTotal.Value, existing.CantidadCuotas.Value);
+        }
 
         return await _transactionStore.UpdateAsync(existing, ct);
     }
@@ -172,31 +193,11 @@ public class TransactionManager : ITransactionManager
 
     private async Task ValidateAndNormalizeTransactionAsync(Transaction transaction, CancellationToken ct)
     {
-        if (transaction.Monto <= 0)
-        {
-            throw new BusinessException("El monto debe ser mayor a cero.");
-        }
-
-        if (string.IsNullOrWhiteSpace(transaction.Descripcion))
-        {
-            throw new BusinessException("La descripción es obligatoria.");
-        }
-
-        transaction.Descripcion = transaction.Descripcion.Trim();
-        transaction.Notas = string.IsNullOrWhiteSpace(transaction.Notas) ? null : transaction.Notas.Trim();
-
-        // Normalización de Fecha según Sección 5:
-        // "Fecha del movimiento: día calendario elegido, guardado como UTC a las 00:00:00"
-        transaction.Fecha = DateTime.SpecifyKind(transaction.Fecha.Date, DateTimeKind.Utc);
-
-        // Validaciones y normalizaciones de movimientos fijos (Sección 3.4 y 10)
+        // 1. Validaciones y normalizaciones de movimientos fijos (Sección 3.4 y 10)
         if (transaction.Frecuencia == Frecuencia.Fijo)
         {
-            if (transaction.CantidadCuotas.HasValue && transaction.CantidadCuotas.Value > 1)
-            {
-                throw new BusinessException("Los movimientos fijos no pueden tener cuotas.");
-            }
-            if (transaction.MontoTotal.HasValue && transaction.MontoTotal.Value > 0)
+            if ((transaction.CantidadCuotas.HasValue && transaction.CantidadCuotas.Value > 1) ||
+                (transaction.MontoTotal.HasValue && transaction.MontoTotal.Value > 0))
             {
                 throw new BusinessException("Los movimientos fijos no pueden tener cuotas.");
             }
@@ -213,6 +214,74 @@ public class TransactionManager : ITransactionManager
                 }
             }
         }
+
+        // 2. Validación y cálculo de compras en cuotas (Sección 3.5 y 10)
+        var esCompraEnCuotas = (transaction.CantidadCuotas.HasValue && transaction.CantidadCuotas.Value > 1) ||
+                               (transaction.MontoTotal.HasValue && transaction.MontoTotal.Value > 0);
+
+        if (esCompraEnCuotas)
+        {
+            if (transaction.Tipo != TipoMovimiento.Gasto)
+            {
+                throw new BusinessException("Las compras en cuotas solo pueden ser de tipo Gasto.");
+            }
+
+            if (transaction.Frecuencia != Frecuencia.Eventual)
+            {
+                throw new BusinessException("Las compras en cuotas solo pueden tener frecuencia Eventual.");
+            }
+
+            if (!transaction.CantidadCuotas.HasValue || transaction.CantidadCuotas.Value <= 1)
+            {
+                throw new BusinessException("La cantidad de cuotas debe ser mayor a 1.");
+            }
+
+            if (!transaction.MontoTotal.HasValue || transaction.MontoTotal.Value <= 0)
+            {
+                throw new BusinessException("El monto total es obligatorio y debe ser mayor a cero para compras en cuotas.");
+            }
+
+            if (transaction.MedioPago != MedioPago.Tarjeta || !transaction.TarjetaId.HasValue)
+            {
+                throw new BusinessException("Las compras en cuotas deben pagarse con tarjeta de crédito.");
+            }
+
+            var tarjeta = await _tarjetaStore.GetByIdAsync(transaction.TarjetaId.Value, ct);
+            if (tarjeta == null)
+            {
+                throw new BusinessException($"No se encontró la tarjeta con ID {transaction.TarjetaId.Value}.");
+            }
+
+            if (tarjeta.TipoTarjeta != TipoTarjeta.Credito)
+            {
+                throw new BusinessException("Las compras en cuotas solo pueden realizarse con tarjetas de crédito.");
+            }
+
+            transaction.CuotasPagadas ??= 0;
+            transaction.FechaPrimeraCuota ??= transaction.Fecha;
+            transaction.FechaPrimeraCuota = DateTime.SpecifyKind(transaction.FechaPrimeraCuota.Value.Date, DateTimeKind.Utc);
+            transaction.FechaPrimeraCuotaPendiente ??= transaction.FechaPrimeraCuota;
+
+            // Se calcula y asigna el valor de la cuota base
+            transaction.Monto = CuotaCalculator.CalcularValorCuotaBase(transaction.MontoTotal.Value, transaction.CantidadCuotas.Value);
+        }
+
+        if (transaction.Monto <= 0)
+        {
+            throw new BusinessException("El monto debe ser mayor a cero.");
+        }
+
+        if (string.IsNullOrWhiteSpace(transaction.Descripcion))
+        {
+            throw new BusinessException("La descripción es obligatoria.");
+        }
+
+        transaction.Descripcion = transaction.Descripcion.Trim();
+        transaction.Notas = string.IsNullOrWhiteSpace(transaction.Notas) ? null : transaction.Notas.Trim();
+
+        // Normalización de Fecha según Sección 5:
+        // "Fecha del movimiento: día calendario elegido, guardado como UTC a las 00:00:00"
+        transaction.Fecha = DateTime.SpecifyKind(transaction.Fecha.Date, DateTimeKind.Utc);
 
         // Validación de categoría (Sección 3.2 y 10: "La categoría es del mismo tipo que el movimiento")
         var category = await _categoryStore.GetByIdAsync(transaction.CategoryId, ct);

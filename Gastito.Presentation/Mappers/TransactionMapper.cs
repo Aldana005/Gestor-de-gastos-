@@ -1,4 +1,5 @@
 using Gastito.Entities.Models;
+using Gastito.Entities.Utils;
 using Gastito.Presentation.Inputs.Transactions;
 using Gastito.Presentation.Outputs.Common;
 using Gastito.Presentation.Outputs.Transactions;
@@ -9,6 +10,19 @@ public static class TransactionMapper
 {
     public static TransactionOutput ToOutput(this Transaction entity)
     {
+        decimal? valorCuota = null;
+        decimal? valorUltimaCuota = null;
+        int? cuotasRestantes = null;
+        decimal? montoPendiente = null;
+
+        if (entity.MontoTotal.HasValue && entity.CantidadCuotas.HasValue && entity.CantidadCuotas.Value > 1)
+        {
+            valorCuota = CuotaCalculator.CalcularValorCuotaBase(entity.MontoTotal.Value, entity.CantidadCuotas.Value);
+            valorUltimaCuota = CuotaCalculator.CalcularValorUltimaCuota(entity.MontoTotal.Value, entity.CantidadCuotas.Value);
+            cuotasRestantes = Math.Max(0, entity.CantidadCuotas.Value - (entity.CuotasPagadas ?? 0));
+            montoPendiente = CuotaCalculator.CalcularMontoPendiente(entity.MontoTotal.Value, entity.CantidadCuotas.Value, entity.CuotasPagadas ?? 0);
+        }
+
         return new TransactionOutput
         {
             Id = entity.Id,
@@ -32,6 +46,10 @@ public static class TransactionMapper
             CuotasPagadas = entity.CuotasPagadas,
             FechaPrimeraCuota = entity.FechaPrimeraCuota,
             FechaPrimeraCuotaPendiente = entity.FechaPrimeraCuotaPendiente,
+            ValorCuota = valorCuota,
+            ValorUltimaCuota = valorUltimaCuota,
+            CuotasRestantes = cuotasRestantes,
+            MontoPendiente = montoPendiente,
             HistorialMontos = entity.HistorialMontos?
                 .OrderBy(h => h.VigenteDesde)
                 .Select(h => new HistorialMontoOutput
@@ -78,7 +96,10 @@ public static class TransactionMapper
             MedioPago = input.MedioPago,
             TarjetaId = input.TarjetaId,
             FechaInicio = input.FechaInicio,
-            FechaFin = input.FechaFin
+            FechaFin = input.FechaFin,
+            MontoTotal = input.MontoTotal,
+            CantidadCuotas = input.CantidadCuotas,
+            FechaPrimeraCuota = input.FechaPrimeraCuota
         };
     }
 
@@ -96,7 +117,10 @@ public static class TransactionMapper
             MedioPago = input.MedioPago,
             TarjetaId = input.TarjetaId,
             FechaInicio = input.FechaInicio,
-            FechaFin = input.FechaFin
+            FechaFin = input.FechaFin,
+            MontoTotal = input.MontoTotal,
+            CantidadCuotas = input.CantidadCuotas,
+            FechaPrimeraCuota = input.FechaPrimeraCuota
         };
     }
 }

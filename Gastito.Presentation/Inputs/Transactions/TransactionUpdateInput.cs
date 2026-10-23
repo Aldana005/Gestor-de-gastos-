@@ -18,4 +18,9 @@ public class TransactionUpdateInput
     public DateTime? FechaInicio { get; set; }
     public DateTime? FechaFin { get; set; }
     public AplicarDesde? AplicarDesde { get; set; }
+
+    // Gastos en cuotas
+    public decimal? MontoTotal { get; set; }
+    public int? CantidadCuotas { get; set; }
+    public DateTime? FechaPrimeraCuota { get; set; }
 }

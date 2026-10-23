@@ -17,4 +17,9 @@ public class TransactionCreateInput
     // Movimientos fijos (recurrentes)
     public DateTime? FechaInicio { get; set; }
     public DateTime? FechaFin { get; set; }
+
+    // Gastos en cuotas
+    public decimal? MontoTotal { get; set; }
+    public int? CantidadCuotas { get; set; }
+    public DateTime? FechaPrimeraCuota { get; set; }
 }

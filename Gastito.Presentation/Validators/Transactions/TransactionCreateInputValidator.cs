@@ -8,8 +8,38 @@ public class TransactionCreateInputValidator : AbstractValidator<TransactionCrea
 {
     public TransactionCreateInputValidator()
     {
-        RuleFor(x => x.Monto)
-            .GreaterThan(0).WithMessage("El monto debe ser mayor a 0.");
+        When(x => !x.CantidadCuotas.HasValue || x.CantidadCuotas <= 1, () =>
+        {
+            RuleFor(x => x.Monto)
+                .GreaterThan(0).WithMessage("El monto debe ser mayor a 0.");
+        });
+
+        When(x => x.CantidadCuotas.HasValue && x.CantidadCuotas > 1, () =>
+        {
+            RuleFor(x => x.MontoTotal)
+                .NotNull().WithMessage("El monto total es obligatorio para compras en cuotas.")
+                .GreaterThan(0).WithMessage("El monto total debe ser mayor a 0.");
+
+            RuleFor(x => x.Tipo)
+                .Equal(TipoMovimiento.Gasto).WithMessage("Las compras en cuotas solo pueden ser de tipo Gasto.");
+
+            RuleFor(x => x.Frecuencia)
+                .Equal(Frecuencia.Eventual).WithMessage("Las compras en cuotas solo pueden tener frecuencia Eventual.");
+
+            RuleFor(x => x.MedioPago)
+                .Equal(MedioPago.Tarjeta).WithMessage("Las compras en cuotas deben pagarse con Tarjeta.");
+
+            RuleFor(x => x.TarjetaId)
+                .NotNull().WithMessage("Debe seleccionar una tarjeta para compras en cuotas.")
+                .GreaterThan(0).WithMessage("Debe seleccionar una tarjeta válida.");
+        });
+
+        When(x => x.MontoTotal.HasValue, () =>
+        {
+            RuleFor(x => x.CantidadCuotas)
+                .NotNull().WithMessage("Debe indicar la cantidad de cuotas.")
+                .GreaterThan(1).WithMessage("La cantidad de cuotas debe ser mayor a 1.");
+        });
 
         RuleFor(x => x.Descripcion)
             .NotEmpty().WithMessage("La descripción es obligatoria.")

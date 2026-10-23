@@ -31,5 +31,10 @@ public class TransactionOutput
     public DateTime? FechaPrimeraCuota { get; set; }
     public DateTime? FechaPrimeraCuotaPendiente { get; set; }
 
+    public decimal? ValorCuota { get; set; }
+    public decimal? ValorUltimaCuota { get; set; }
+    public int? CuotasRestantes { get; set; }
+    public decimal? MontoPendiente { get; set; }
+
     public List<HistorialMontoOutput> HistorialMontos { get; set; } = new();
 }
