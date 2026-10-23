@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gastito.Presentation", "Gas
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gastito.Api", "Gastito.Api\Gastito.Api.csproj", "{8AF22349-EF3D-47C5-AAAF-54C432E51E82}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gastito.Tests", "Gastito.Tests\Gastito.Tests.csproj", "{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{8AF22349-EF3D-47C5-AAAF-54C432E51E82}.Release|x64.Build.0 = Release|Any CPU
 		{8AF22349-EF3D-47C5-AAAF-54C432E51E82}.Release|x86.ActiveCfg = Release|Any CPU
 		{8AF22349-EF3D-47C5-AAAF-54C432E51E82}.Release|x86.Build.0 = Release|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Debug|x64.Build.0 = Debug|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Debug|x86.Build.0 = Debug|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Release|x64.ActiveCfg = Release|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Release|x64.Build.0 = Release|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Release|x86.ActiveCfg = Release|Any CPU
+		{6DDD5DF3-9EAE-4A2F-A9F4-DE591A8829FC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
