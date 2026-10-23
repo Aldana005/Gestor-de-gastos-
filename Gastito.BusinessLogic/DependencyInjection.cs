@@ -12,8 +12,10 @@ public static class DependencyInjection
     {
         services.AddDataAccess(configuration);
 
-        // Register Managers and Services
+        // Register Managers
         services.AddScoped<IAuthManager, AuthManager>();
+        services.AddScoped<ICategoryManager, CategoryManager>();
+        services.AddScoped<ITarjetaManager, TarjetaManager>();
 
         return services;
     }

@@ -1,3 +1,5 @@
+using Gastito.DataAccess.Interfaces;
+using Gastito.DataAccess.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +16,10 @@ public static class DependencyInjection
         {
             options.UseNpgsql(connectionString, b => b.MigrationsAssembly("Gastito.DataAccess"));
         });
+
+        // Register Stores
+        services.AddScoped<ICategoryStore, CategoryStore>();
+        services.AddScoped<ITarjetaStore, TarjetaStore>();
 
         return services;
     }
