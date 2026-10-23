@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: gastito_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: gastito_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - gastito_pgdata:/var/lib/postgresql/data
+
+volumes:
+  gastito_pgdata:

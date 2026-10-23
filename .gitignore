@@ -1,0 +1,35 @@
+## Build & Binaries
+bin/
+obj/
+out/
+
+## Visual Studio & VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## JetBrains Rider
+.idea/
+*.sln.iml
+
+## Logs & Temp
+*.log
+*.tmp
+TestResults/
+
+## OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## Node / Frontend (when added)
+node_modules/
+dist/
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
