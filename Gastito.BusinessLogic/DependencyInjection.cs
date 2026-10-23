@@ -1,3 +1,5 @@
+using Gastito.BusinessLogic.Interfaces;
+using Gastito.BusinessLogic.Managers;
 using Gastito.DataAccess;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +12,9 @@ public static class DependencyInjection
     {
         services.AddDataAccess(configuration);
 
-        // BusinessLogic registrations (Managers, Services, etc.) will be added in subsequent phases
+        // Register Managers and Services
+        services.AddScoped<IAuthManager, AuthManager>();
+
         return services;
     }
 }

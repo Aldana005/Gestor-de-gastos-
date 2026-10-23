@@ -25,6 +25,8 @@
     <ProjectReference Include="..\Gastito.Entities\Gastito.Entities.csproj" />
     <ProjectReference Include="..\Gastito.DataAccess\Gastito.DataAccess.csproj" />
     <ProjectReference Include="..\Gastito.Api\Gastito.Api.csproj" />
+    <ProjectReference Include="..\Gastito.BusinessLogic\Gastito.BusinessLogic.csproj" />
+    <ProjectReference Include="..\Gastito.Presentation\Gastito.Presentation.csproj" />
   </ItemGroup>
 
 </Project>
