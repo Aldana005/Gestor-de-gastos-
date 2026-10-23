@@ -23,47 +23,159 @@ public class TransactionStore : ITransactionStore
         int tamanoPagina,
         CancellationToken ct = default)
     {
-        var query = _context.Transactions
+        DateTime? desdeUtc = desde.HasValue ? DateTime.SpecifyKind(desde.Value.Date, DateTimeKind.Utc) : null;
+        DateTime? hastaUtc = hasta.HasValue ? DateTime.SpecifyKind(hasta.Value.Date, DateTimeKind.Utc) : null;
+
+        // 1. Movimientos Eventuales
+        var eventualQuery = _context.Transactions
             .AsNoTracking()
             .Include(t => t.Category)
             .Include(t => t.Tarjeta)
+            .Include(t => t.HistorialMontos)
+            .Where(t => t.Frecuencia == Frecuencia.Eventual)
             .AsQueryable();
 
-        if (desde.HasValue)
+        if (desdeUtc.HasValue)
         {
-            var desdeUtc = DateTime.SpecifyKind(desde.Value.Date, DateTimeKind.Utc);
-            query = query.Where(t => t.Fecha >= desdeUtc);
+            eventualQuery = eventualQuery.Where(t => t.Fecha >= desdeUtc.Value);
         }
 
-        if (hasta.HasValue)
+        if (hastaUtc.HasValue)
         {
-            var hastaUtc = DateTime.SpecifyKind(hasta.Value.Date, DateTimeKind.Utc);
-            query = query.Where(t => t.Fecha <= hastaUtc);
+            eventualQuery = eventualQuery.Where(t => t.Fecha <= hastaUtc.Value);
         }
 
         if (tipo.HasValue)
         {
-            query = query.Where(t => t.Tipo == tipo.Value);
+            eventualQuery = eventualQuery.Where(t => t.Tipo == tipo.Value);
         }
 
         if (categoriaIds != null && categoriaIds.Count > 0)
         {
-            query = query.Where(t => categoriaIds.Contains(t.CategoryId));
+            eventualQuery = eventualQuery.Where(t => categoriaIds.Contains(t.CategoryId));
         }
 
-        var totalCount = await query.CountAsync(ct);
+        var eventualItems = await eventualQuery.ToListAsync(ct);
+
+        // 2. Movimientos Fijos (recurrentes: aparecen una vez por mes en el período activo)
+        var fixedQuery = _context.Transactions
+            .AsNoTracking()
+            .Include(t => t.Category)
+            .Include(t => t.Tarjeta)
+            .Include(t => t.HistorialMontos)
+            .Where(t => t.Frecuencia == Frecuencia.Fijo)
+            .AsQueryable();
+
+        if (tipo.HasValue)
+        {
+            fixedQuery = fixedQuery.Where(t => t.Tipo == tipo.Value);
+        }
+
+        if (categoriaIds != null && categoriaIds.Count > 0)
+        {
+            fixedQuery = fixedQuery.Where(t => categoriaIds.Contains(t.CategoryId));
+        }
+
+        var fixedTransactions = await fixedQuery.ToListAsync(ct);
+        var fixedOccurrences = new List<Transaction>();
+
+        var defaultNow = DateTime.UtcNow;
+        var queryStart = desdeUtc ?? (hastaUtc.HasValue ? hastaUtc.Value.AddMonths(-2) : new DateTime(defaultNow.Year, defaultNow.Month, 1, 0, 0, 0, DateTimeKind.Utc));
+        var queryEnd = hastaUtc ?? (desdeUtc.HasValue ? desdeUtc.Value.AddMonths(2) : new DateTime(defaultNow.Year, defaultNow.Month, DateTime.DaysInMonth(defaultNow.Year, defaultNow.Month), 23, 59, 59, DateTimeKind.Utc));
+
+        foreach (var fixedTx in fixedTransactions)
+        {
+            var fInicio = fixedTx.FechaInicio ?? fixedTx.Fecha;
+            var fFin = fixedTx.FechaFin;
+
+            // Rango efectivo de meses a evaluar
+            var monthCursor = new DateTime(Math.Max(queryStart.Year, fInicio.Year), 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            if (queryStart > fInicio)
+            {
+                monthCursor = new DateTime(queryStart.Year, queryStart.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            }
+            else
+            {
+                monthCursor = new DateTime(fInicio.Year, fInicio.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            }
+
+            var limitDate = queryEnd;
+            if (fFin.HasValue && fFin.Value < limitDate)
+            {
+                limitDate = fFin.Value;
+            }
+
+            var endMonth = new DateTime(limitDate.Year, limitDate.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            while (monthCursor <= endMonth)
+            {
+                var originalDay = fInicio.Day;
+                var daysInMonth = DateTime.DaysInMonth(monthCursor.Year, monthCursor.Month);
+                var day = Math.Min(originalDay, daysInMonth);
+                var occurrenceDate = new DateTime(monthCursor.Year, monthCursor.Month, day, 0, 0, 0, DateTimeKind.Utc);
+
+                var isWithinRange = (!desdeUtc.HasValue || occurrenceDate >= desdeUtc.Value) &&
+                                    (!hastaUtc.HasValue || occurrenceDate <= hastaUtc.Value) &&
+                                    occurrenceDate >= fInicio &&
+                                    (!fFin.HasValue || occurrenceDate <= fFin.Value);
+
+                if (isWithinRange)
+                {
+                    // Buscar monto vigente para este mes
+                    var monthStart = new DateTime(monthCursor.Year, monthCursor.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+                    var effectiveMonto = fixedTx.HistorialMontos
+                        .Where(h => h.VigenteDesde <= monthStart)
+                        .OrderByDescending(h => h.VigenteDesde)
+                        .ThenByDescending(h => h.Id)
+                        .FirstOrDefault()?.Monto ?? fixedTx.Monto;
+
+                    fixedOccurrences.Add(new Transaction
+                    {
+                        Id = fixedTx.Id,
+                        Tipo = fixedTx.Tipo,
+                        Frecuencia = fixedTx.Frecuencia,
+                        Monto = effectiveMonto,
+                        Moneda = fixedTx.Moneda,
+                        Fecha = occurrenceDate,
+                        Descripcion = fixedTx.Descripcion,
+                        Notas = fixedTx.Notas,
+                        CategoryId = fixedTx.CategoryId,
+                        Category = fixedTx.Category,
+                        MedioPago = fixedTx.MedioPago,
+                        TarjetaId = fixedTx.TarjetaId,
+                        Tarjeta = fixedTx.Tarjeta,
+                        FechaInicio = fixedTx.FechaInicio,
+                        FechaFin = fixedTx.FechaFin,
+                        MontoTotal = fixedTx.MontoTotal,
+                        CantidadCuotas = fixedTx.CantidadCuotas,
+                        CuotasPagadas = fixedTx.CuotasPagadas,
+                        FechaPrimeraCuota = fixedTx.FechaPrimeraCuota,
+                        FechaPrimeraCuotaPendiente = fixedTx.FechaPrimeraCuotaPendiente,
+                        CreatedAtUtc = fixedTx.CreatedAtUtc,
+                        HistorialMontos = fixedTx.HistorialMontos
+                    });
+                }
+
+                monthCursor = monthCursor.AddMonths(1);
+            }
+        }
+
+        var allItems = eventualItems.Concat(fixedOccurrences)
+            .OrderByDescending(t => t.Fecha)
+            .ThenByDescending(t => t.Id)
+            .ToList();
+
+        var totalCount = allItems.Count;
 
         if (pagina < 1) pagina = 1;
         if (tamanoPagina < 1) tamanoPagina = 10;
 
-        var items = await query
-            .OrderByDescending(t => t.Fecha)
-            .ThenByDescending(t => t.Id)
+        var pagedItems = allItems
             .Skip((pagina - 1) * tamanoPagina)
             .Take(tamanoPagina)
-            .ToListAsync(ct);
+            .ToList();
 
-        return (items, totalCount);
+        return (pagedItems, totalCount);
     }
 
     public async Task<Transaction?> GetByIdAsync(int id, CancellationToken ct = default)
@@ -71,6 +183,7 @@ public class TransactionStore : ITransactionStore
         return await _context.Transactions
             .Include(t => t.Category)
             .Include(t => t.Tarjeta)
+            .Include(t => t.HistorialMontos)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
     }
 

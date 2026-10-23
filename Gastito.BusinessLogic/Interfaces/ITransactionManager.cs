@@ -18,7 +18,7 @@ public interface ITransactionManager
 
     Task<Transaction> CreateAsync(Transaction transaction, CancellationToken ct = default);
 
-    Task<Transaction> UpdateAsync(int id, Transaction updatedData, CancellationToken ct = default);
+    Task<Transaction> UpdateAsync(int id, Transaction updatedData, AplicarDesde? aplicarDesde = null, CancellationToken ct = default);
 
     Task DeleteAsync(int id, CancellationToken ct = default);
 }

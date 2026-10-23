@@ -175,7 +175,7 @@ public class MovimientosControllerTests
         };
 
         // Act
-        var result = await controller.Update(999, input, CancellationToken.None);
+        var result = await controller.Update(999, input, ct: CancellationToken.None);
 
         // Assert
         var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
@@ -213,7 +213,7 @@ public class MovimientosControllerTests
         };
 
         // Act
-        var result = await controller.Update(trans.Id, updateInput, CancellationToken.None);
+        var result = await controller.Update(trans.Id, updateInput, ct: CancellationToken.None);
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);

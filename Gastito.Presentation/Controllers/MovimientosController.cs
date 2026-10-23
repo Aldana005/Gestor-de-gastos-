@@ -1,6 +1,7 @@
 using FluentValidation;
 using Gastito.BusinessLogic.Exceptions;
 using Gastito.BusinessLogic.Interfaces;
+using Gastito.Entities.Enums;
 using Gastito.Presentation.Inputs.Transactions;
 using Gastito.Presentation.Mappers;
 using Gastito.Presentation.Outputs.Common;
@@ -100,7 +101,11 @@ public class MovimientosController : ControllerBase
     [ProducesResponseType(typeof(TransactionOutput), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Update(int id, [FromBody] TransactionUpdateInput input, CancellationToken ct)
+    public async Task<IActionResult> Update(
+        int id,
+        [FromBody] TransactionUpdateInput input,
+        [FromQuery] AplicarDesde? aplicarDesde = null,
+        CancellationToken ct = default)
     {
         var validation = await _updateValidator.ValidateAsync(input, ct);
         if (!validation.IsValid)
@@ -125,7 +130,8 @@ public class MovimientosController : ControllerBase
 
         try
         {
-            var updated = await _transactionManager.UpdateAsync(id, input.ToEntity(), ct);
+            var effectiveAplicarDesde = aplicarDesde ?? input.AplicarDesde;
+            var updated = await _transactionManager.UpdateAsync(id, input.ToEntity(), effectiveAplicarDesde, ct);
             return Ok(updated.ToOutput());
         }
         catch (BusinessException ex)

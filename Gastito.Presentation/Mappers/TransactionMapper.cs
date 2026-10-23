@@ -31,7 +31,16 @@ public static class TransactionMapper
             CantidadCuotas = entity.CantidadCuotas,
             CuotasPagadas = entity.CuotasPagadas,
             FechaPrimeraCuota = entity.FechaPrimeraCuota,
-            FechaPrimeraCuotaPendiente = entity.FechaPrimeraCuotaPendiente
+            FechaPrimeraCuotaPendiente = entity.FechaPrimeraCuotaPendiente,
+            HistorialMontos = entity.HistorialMontos?
+                .OrderBy(h => h.VigenteDesde)
+                .Select(h => new HistorialMontoOutput
+                {
+                    Id = h.Id,
+                    Monto = h.Monto,
+                    VigenteDesde = h.VigenteDesde,
+                    CreatedAtUtc = h.CreatedAtUtc
+                }).ToList() ?? new()
         };
     }
 
@@ -67,7 +76,9 @@ public static class TransactionMapper
             Notas = input.Notas,
             CategoryId = input.CategoryId,
             MedioPago = input.MedioPago,
-            TarjetaId = input.TarjetaId
+            TarjetaId = input.TarjetaId,
+            FechaInicio = input.FechaInicio,
+            FechaFin = input.FechaFin
         };
     }
 
@@ -83,7 +94,9 @@ public static class TransactionMapper
             Notas = input.Notas,
             CategoryId = input.CategoryId,
             MedioPago = input.MedioPago,
-            TarjetaId = input.TarjetaId
+            TarjetaId = input.TarjetaId,
+            FechaInicio = input.FechaInicio,
+            FechaFin = input.FechaFin
         };
     }
 }

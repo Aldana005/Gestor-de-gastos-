@@ -55,5 +55,17 @@ public class TransactionCreateInputValidator : AbstractValidator<TransactionCrea
             RuleFor(x => x.TarjetaId)
                 .Null().WithMessage("Los ingresos no deben tener tarjeta asociada.");
         });
+
+        When(x => x.Frecuencia == Frecuencia.Fijo, () =>
+        {
+            RuleFor(x => x.FechaFin)
+                .Must((input, fechaFin) =>
+                {
+                    if (!fechaFin.HasValue) return true;
+                    var fechaInicio = input.FechaInicio ?? input.Fecha;
+                    return fechaFin.Value.Date >= fechaInicio.Date;
+                })
+                .WithMessage("La fecha de fin no puede ser anterior a la fecha de inicio.");
+        });
     }
 }

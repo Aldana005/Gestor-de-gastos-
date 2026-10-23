@@ -58,8 +58,8 @@ Gastito.Api -> Gastito.Presentation -> Gastito.BusinessLogic -> Gastito.DataAcce
 | **2** | Login | ✅ Completada | Usuario fijo en configuración, `AuthManager`, JWT Bearer, protección de endpoints. |
 | **3** | Categorías y Tarjetas | ✅ Completada | CRUD completo, seed no editable/borrable, validación de no borrado si existen movimientos asociados. |
 | **4** | Movimientos básicos | ✅ Completada | CRUD en `/api/v1/movimientos`, paginación (`PagedResult`), filtros por fecha/tipo/categorías, medios de pago condicionales, validación de categoría por tipo, soft delete auditado. |
-| **5** | **Fijos** | ⏳ **SIGUIENTE FASE** | **Movimientos recurrentes (mensuales)**: fecha inicio y fecha fin opcional, sin cuotas, historial de montos (`HistorialMonto`), actualización con opción `aplicarDesde = MesActual \| MesSiguiente`. |
-| **6** | Cuotas | ⏳ Pendiente | Gastos en cuotas (tarjeta de crédito), cálculo de valor de cuota, absorción de redondeo en última cuota. |
+| **5** | Fijos | ✅ Completada | Movimientos recurrentes (mensuales), `FechaInicio` y `FechaFin`, sin cuotas, historial de montos (`HistorialMonto`), actualización con `aplicarDesde = MesActual | MesSiguiente`, ocurrencias mensuales en consultas. |
+| **6** | **Cuotas** | ⏳ **SIGUIENTE FASE** | **Gastos en cuotas (tarjeta de crédito)**: alta de compras en cuotas, cálculo de valor de cuota con absorción de redondeo en la última cuota, inicialización de calendario de cuotas, cuotas restantes. |
 | **7** | Pendientes y adelantar | ⏳ Pendiente | Listado ordenado de deudas del período, botón "Adelantar", calendario corrido e historial en `PagoCuota`. |
 | **8** | Dashboard y Reportes | ⏳ Pendiente | Métricas del mes actual, gastos por categoría (torta), evolución de ingresos vs gastos (líneas 3 a 12 meses), reportes con filtros. |
 | **9** | Calidad | ⏳ Pendiente | Middleware global de excepciones, logging con Serilog, tests adicionales. |
@@ -68,26 +68,26 @@ Gastito.Api -> Gastito.Presentation -> Gastito.BusinessLogic -> Gastito.DataAcce
 
 ---
 
-## 4. Guía Detallada para la Próxima Sesión: FASE 5 (Fijos)
+## 4. Guía Detallada para la Próxima Sesión: FASE 6 (Cuotas)
 
-### Requerimientos de la Fase 5 (Secciones 3.4 y 12 del Documento de Decisiones):
+### Requerimientos de la Fase 6 (Secciones 3.5, 4.2 y 10 del Documento de Decisiones):
 1. **Entidad `Transaction`**:
-   - Ya tiene las columnas `FechaInicio` y `FechaFin`.
-   - `Frecuencia = Frecuencia.Fijo`.
-   - Solo mensual. No pueden tener cuotas.
-2. **Historial de Montos (`HistorialMonto`)**:
-   - Columnas: `Id`, `TransactionId`, `Monto`, `VigenteDesde` (primer día del mes como UTC), `CreatedAtUtc`.
-   - Cuando un movimiento fijo cambia de monto:
-     - Opción 1: `MesActual` (el nuevo monto rige desde el mes en curso).
-     - Opción 2: `MesSiguiente` (el nuevo monto rige desde el 1° del mes siguiente).
-     - Los meses anteriores conservan su valor histórico en reportes gracias a los registros de `HistorialMonto`.
-3. **Endpoints involucrados**:
-   - `PUT /api/v1/movimientos/{id}?aplicarDesde=MesActual` o `MesSiguiente`:
-     - Para movimientos fijos, registrar el nuevo monto en `HistorialMonto`.
-4. **Validaciones**:
-   - Fijo no admite cuotas.
-   - `FechaFin` no puede ser anterior a `FechaInicio`.
-   - `aplicarDesde` obligatorio o con valor por defecto cuando se actualiza el monto de un fijo.
+   - `MontoTotal`: decimal(18,2) obligatorio en cuotas.
+   - `CantidadCuotas`: entero mayor a 1 (`> 1`).
+   - `CuotasPagadas`: inicializado en 0.
+   - `FechaPrimeraCuota`: fecha calendario UTC 00:00:00 (por defecto igual a `Fecha`).
+   - `FechaPrimeraCuotaPendiente`: inicializado en `FechaPrimeraCuota`.
+   - `Monto`: en la creación, se almacena o calcula el valor de la cuota base o `MontoTotal`.
+2. **Reglas de Negocio y Validaciones**:
+   - Solo aplicable a gastos (`Tipo = TipoMovimiento.Gasto`).
+   - Solo compras eventuales (`Frecuencia = Frecuencia.Eventual`).
+   - Solo pagadas con tarjeta de crédito (`MedioPago = MedioPago.Tarjeta` y `Tarjeta.TipoTarjeta = TipoTarjeta.Credito`).
+   - `CantidadCuotas > 1`.
+   - Valor de cada cuota = `MontoTotal / CantidadCuotas`. La última cuota absorbe la diferencia de redondeo.
+   - Si una compra en cuotas ya tiene cuotas pagadas (`CuotasPagadas > 0`), no se pueden editar `MontoTotal` ni `CantidadCuotas`.
+3. **Endpoints y Contratos**:
+   - `POST /api/v1/movimientos`: aceptar `MontoTotal`, `CantidadCuotas`, `FechaPrimeraCuota`.
+   - `TransactionOutput`: incluir `MontoTotal`, `CantidadCuotas`, `CuotasPagadas`, `ValorCuota`, `FechaPrimeraCuota`, `FechaPrimeraCuotaPendiente`.
 
 ---
 
@@ -103,13 +103,13 @@ dotnet build
 # Iniciar contenedor de base de datos PostgreSQL si se requiere
 docker compose up -d
 
-# Convención de ramas para la Fase 5:
-git checkout -b fase-5-fijos
+# Convención de ramas para la Fase 6:
+git checkout -b fase-6-cuotas
 # ... al terminar y verificar tests:
-git commit -m "Fase 5: Fijos - ..."
+git commit -m "Fase 6: Cuotas - ..."
 git checkout main
-git merge fase-5-fijos
+git merge fase-6-cuotas
 ```
 
 ---
-*Última actualización: Cierre de Fase 4 (43/43 tests pasando).*
+*Última actualización: Cierre de Fase 5 (51/51 tests pasando).*

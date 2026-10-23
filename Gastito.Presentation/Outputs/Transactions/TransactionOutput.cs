@@ -30,4 +30,6 @@ public class TransactionOutput
     public int? CuotasPagadas { get; set; }
     public DateTime? FechaPrimeraCuota { get; set; }
     public DateTime? FechaPrimeraCuotaPendiente { get; set; }
+
+    public List<HistorialMontoOutput> HistorialMontos { get; set; } = new();
 }

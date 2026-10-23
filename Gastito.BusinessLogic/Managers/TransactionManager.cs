@@ -1,5 +1,6 @@
 using Gastito.BusinessLogic.Exceptions;
 using Gastito.BusinessLogic.Interfaces;
+using Gastito.BusinessLogic.Utils;
 using Gastito.DataAccess.Interfaces;
 using Gastito.Entities.Enums;
 using Gastito.Entities.Models;
@@ -48,10 +49,24 @@ public class TransactionManager : ITransactionManager
         transaction.IsDeleted = false;
         transaction.DeletedAtUtc = null;
 
+        // Para movimientos fijos (recurrentes), registrar el monto inicial en HistorialMonto
+        if (transaction.Frecuencia == Frecuencia.Fijo)
+        {
+            var fInicio = transaction.FechaInicio ?? transaction.Fecha;
+            var vigenteDesde = DateTimeUtils.GetStartOfMonthUtc(fInicio);
+
+            transaction.HistorialMontos.Add(new HistorialMonto
+            {
+                Monto = transaction.Monto,
+                VigenteDesde = vigenteDesde,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+
         return await _transactionStore.CreateAsync(transaction, ct);
     }
 
-    public async Task<Transaction> UpdateAsync(int id, Transaction updatedData, CancellationToken ct = default)
+    public async Task<Transaction> UpdateAsync(int id, Transaction updatedData, AplicarDesde? aplicarDesde = null, CancellationToken ct = default)
     {
         var existing = await _transactionStore.GetByIdAsync(id, ct);
         if (existing == null)
@@ -73,10 +88,61 @@ public class TransactionManager : ITransactionManager
 
         await ValidateAndNormalizeTransactionAsync(updatedData, ct);
 
+        // Si es movimiento fijo y cambia el monto, registrar en HistorialMonto (Sección 3.4)
+        if (updatedData.Frecuencia == Frecuencia.Fijo && updatedData.Monto != existing.Monto)
+        {
+            var opcion = aplicarDesde ?? AplicarDesde.MesActual;
+            var today = DateTimeUtils.GetArgentinaToday();
+            var vigenteDesde = opcion == AplicarDesde.MesActual
+                ? DateTimeUtils.GetStartOfMonthUtc(today)
+                : DateTimeUtils.GetStartOfNextMonthUtc(today);
+
+            if (opcion == AplicarDesde.MesSiguiente)
+            {
+                // Asegurarse de que el mes actual conserve el monto previo en el historial
+                var currentMonthStart = DateTimeUtils.GetStartOfMonthUtc(today);
+                var currentMonthRecord = existing.HistorialMontos.FirstOrDefault(h => h.VigenteDesde == currentMonthStart);
+                if (currentMonthRecord == null)
+                {
+                    existing.HistorialMontos.Add(new HistorialMonto
+                    {
+                        TransactionId = existing.Id,
+                        Monto = existing.Monto,
+                        VigenteDesde = currentMonthStart,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+            }
+
+            var targetRecord = existing.HistorialMontos.FirstOrDefault(h => h.VigenteDesde == vigenteDesde);
+            if (targetRecord != null)
+            {
+                targetRecord.Monto = updatedData.Monto;
+            }
+            else
+            {
+                existing.HistorialMontos.Add(new HistorialMonto
+                {
+                    TransactionId = existing.Id,
+                    Monto = updatedData.Monto,
+                    VigenteDesde = vigenteDesde,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+
+            if (opcion == AplicarDesde.MesActual)
+            {
+                existing.Monto = updatedData.Monto;
+            }
+        }
+        else
+        {
+            existing.Monto = updatedData.Monto;
+        }
+
         // Actualizar propiedades editables
         existing.Tipo = updatedData.Tipo;
         existing.Frecuencia = updatedData.Frecuencia;
-        existing.Monto = updatedData.Monto;
         existing.Fecha = updatedData.Fecha;
         existing.Descripcion = updatedData.Descripcion.Trim();
         existing.Notas = string.IsNullOrWhiteSpace(updatedData.Notas) ? null : updatedData.Notas.Trim();
@@ -84,9 +150,9 @@ public class TransactionManager : ITransactionManager
         existing.MedioPago = updatedData.MedioPago;
         existing.TarjetaId = updatedData.TarjetaId;
 
-        // Si fuera el caso de cuotas/fijos futuros, preservar o actualizar
-        if (updatedData.FechaInicio.HasValue) existing.FechaInicio = updatedData.FechaInicio;
-        if (updatedData.FechaFin.HasValue) existing.FechaFin = updatedData.FechaFin;
+        // Fijos y cuotas
+        existing.FechaInicio = updatedData.FechaInicio;
+        existing.FechaFin = updatedData.FechaFin;
         if (updatedData.MontoTotal.HasValue) existing.MontoTotal = updatedData.MontoTotal;
         if (updatedData.CantidadCuotas.HasValue) existing.CantidadCuotas = updatedData.CantidadCuotas;
 
@@ -122,6 +188,31 @@ public class TransactionManager : ITransactionManager
         // Normalización de Fecha según Sección 5:
         // "Fecha del movimiento: día calendario elegido, guardado como UTC a las 00:00:00"
         transaction.Fecha = DateTime.SpecifyKind(transaction.Fecha.Date, DateTimeKind.Utc);
+
+        // Validaciones y normalizaciones de movimientos fijos (Sección 3.4 y 10)
+        if (transaction.Frecuencia == Frecuencia.Fijo)
+        {
+            if (transaction.CantidadCuotas.HasValue && transaction.CantidadCuotas.Value > 1)
+            {
+                throw new BusinessException("Los movimientos fijos no pueden tener cuotas.");
+            }
+            if (transaction.MontoTotal.HasValue && transaction.MontoTotal.Value > 0)
+            {
+                throw new BusinessException("Los movimientos fijos no pueden tener cuotas.");
+            }
+
+            transaction.FechaInicio ??= transaction.Fecha;
+            transaction.FechaInicio = DateTime.SpecifyKind(transaction.FechaInicio.Value.Date, DateTimeKind.Utc);
+
+            if (transaction.FechaFin.HasValue)
+            {
+                transaction.FechaFin = DateTime.SpecifyKind(transaction.FechaFin.Value.Date, DateTimeKind.Utc);
+                if (transaction.FechaFin.Value < transaction.FechaInicio.Value)
+                {
+                    throw new BusinessException("La fecha de fin no puede ser anterior a la fecha de inicio.");
+                }
+            }
+        }
 
         // Validación de categoría (Sección 3.2 y 10: "La categoría es del mismo tipo que el movimiento")
         var category = await _categoryStore.GetByIdAsync(transaction.CategoryId, ct);

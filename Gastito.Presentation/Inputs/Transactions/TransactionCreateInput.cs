@@ -13,4 +13,8 @@ public class TransactionCreateInput
     public int CategoryId { get; set; }
     public MedioPago? MedioPago { get; set; }
     public int? TarjetaId { get; set; }
+
+    // Movimientos fijos (recurrentes)
+    public DateTime? FechaInicio { get; set; }
+    public DateTime? FechaFin { get; set; }
 }
