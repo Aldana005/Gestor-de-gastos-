@@ -105,7 +105,7 @@ public class CuotasTests
         Assert.Equal(0, created.CuotasPagadas);
         Assert.Equal(20000m, created.Monto); // 120.000 / 6 = 20.000 cuota base
         Assert.Equal(new DateTime(2026, 4, 10, 0, 0, 0, DateTimeKind.Utc), created.FechaPrimeraCuota);
-        Assert.Equal(new DateTime(2026, 4, 10, 0, 0, 0, DateTimeKind.Utc), created.FechaPrimeraCuotaPendiente);
+        Assert.Null(created.FechaPrimeraCuotaPendiente);
     }
 
     [Fact]

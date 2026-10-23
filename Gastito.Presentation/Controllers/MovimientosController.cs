@@ -2,9 +2,11 @@ using FluentValidation;
 using Gastito.BusinessLogic.Exceptions;
 using Gastito.BusinessLogic.Interfaces;
 using Gastito.Entities.Enums;
+using Gastito.Presentation.Inputs.Cuotas;
 using Gastito.Presentation.Inputs.Transactions;
 using Gastito.Presentation.Mappers;
 using Gastito.Presentation.Outputs.Common;
+using Gastito.Presentation.Outputs.Cuotas;
 using Gastito.Presentation.Outputs.Transactions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -176,5 +178,58 @@ public class MovimientosController : ControllerBase
                 Detail = ex.Message
             });
         }
+    }
+
+    [HttpPost("{id:int}/cuotas/adelantar")]
+    [ProducesResponseType(typeof(PagoCuotaOutput), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AdelantarCuotas(int id, [FromBody] AdelantarCuotasInput input, CancellationToken ct)
+    {
+        var existing = await _transactionManager.GetByIdAsync(id, ct);
+        if (existing == null)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Movimiento no encontrado",
+                Detail = $"No se encontró el movimiento con ID {id}."
+            });
+        }
+
+        try
+        {
+            var pago = await _transactionManager.AdelantarCuotasAsync(id, input.Cantidad, ct);
+            return Ok(pago.ToOutput());
+        }
+        catch (BusinessException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Regla de negocio no cumplida",
+                Detail = ex.Message
+            });
+        }
+    }
+
+    [HttpGet("{id:int}/cuotas/pagos")]
+    [ProducesResponseType(typeof(List<PagoCuotaOutput>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPagosCuota(int id, CancellationToken ct)
+    {
+        var existing = await _transactionManager.GetByIdAsync(id, ct);
+        if (existing == null)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Movimiento no encontrado",
+                Detail = $"No se encontró el movimiento con ID {id}."
+            });
+        }
+
+        var pagos = await _transactionManager.GetPagosCuotaAsync(id, ct);
+        return Ok(pagos.ToOutputList());
     }
 }

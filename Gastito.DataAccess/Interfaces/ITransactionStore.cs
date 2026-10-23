@@ -21,4 +21,10 @@ public interface ITransactionStore
     Task<Transaction> UpdateAsync(Transaction transaction, CancellationToken ct = default);
 
     Task DeleteAsync(int id, CancellationToken ct = default);
+
+    Task<PagoCuota> AddPagoCuotaAsync(PagoCuota pago, CancellationToken ct = default);
+
+    Task<List<PagoCuota>> GetPagosCuotaAsync(int transactionId, CancellationToken ct = default);
+
+    Task<List<Transaction>> GetRawAsync(TipoMovimiento? tipo = null, CancellationToken ct = default);
 }

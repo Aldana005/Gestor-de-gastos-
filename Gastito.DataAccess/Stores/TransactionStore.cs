@@ -58,7 +58,7 @@ public class TransactionStore : ITransactionStore
                 var primeraCuota = item.FechaPrimeraCuota ?? item.Fecha;
                 for (int c = 1; c <= item.CantidadCuotas!.Value; c++)
                 {
-                    var fechaCuota = CuotaCalculator.CalcularFechaCuota(primeraCuota, c);
+                    var fechaCuota = CuotaCalculator.CalcularFechaDeCuotaConCorrimiento(primeraCuota, item.FechaPrimeraCuotaPendiente, item.CuotasPagadas ?? 0, c);
                     var matchesRange = (!desdeUtc.HasValue || fechaCuota >= desdeUtc.Value) &&
                                        (!hastaUtc.HasValue || fechaCuota <= hastaUtc.Value);
                     if (matchesRange)
@@ -230,6 +230,7 @@ public class TransactionStore : ITransactionStore
             .Include(t => t.Category)
             .Include(t => t.Tarjeta)
             .Include(t => t.HistorialMontos)
+            .Include(t => t.PagosCuota)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
     }
 
@@ -276,5 +277,39 @@ public class TransactionStore : ITransactionStore
             transaction.DeletedAtUtc = DateTime.UtcNow;
             await _context.SaveChangesAsync(ct);
         }
+    }
+
+    public async Task<PagoCuota> AddPagoCuotaAsync(PagoCuota pago, CancellationToken ct = default)
+    {
+        await _context.Set<PagoCuota>().AddAsync(pago, ct);
+        await _context.SaveChangesAsync(ct);
+        return pago;
+    }
+
+    public async Task<List<PagoCuota>> GetPagosCuotaAsync(int transactionId, CancellationToken ct = default)
+    {
+        return await _context.Set<PagoCuota>()
+            .AsNoTracking()
+            .Where(p => p.TransactionId == transactionId)
+            .OrderBy(p => p.FechaPagoUtc)
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<Transaction>> GetRawAsync(TipoMovimiento? tipo = null, CancellationToken ct = default)
+    {
+        var query = _context.Transactions
+            .AsNoTracking()
+            .Include(t => t.Category)
+            .Include(t => t.Tarjeta)
+            .Include(t => t.HistorialMontos)
+            .Include(t => t.PagosCuota)
+            .AsQueryable();
+
+        if (tipo.HasValue)
+        {
+            query = query.Where(t => t.Tipo == tipo.Value);
+        }
+
+        return await query.ToListAsync(ct);
     }
 }

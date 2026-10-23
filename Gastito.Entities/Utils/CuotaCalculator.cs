@@ -47,4 +47,31 @@ public static class CuotaCalculator
 
         return new DateTime(targetMonth.Year, targetMonth.Month, day, 0, 0, 0, DateTimeKind.Utc);
     }
+
+    public static DateTime CalcularFechaDeCuotaConCorrimiento(
+        DateTime fechaPrimeraCuota,
+        DateTime? fechaPrimeraCuotaPendiente,
+        int cuotasPagadas,
+        int numeroCuota)
+    {
+        if (numeroCuota <= cuotasPagadas || !fechaPrimeraCuotaPendiente.HasValue)
+        {
+            return CalcularFechaCuota(fechaPrimeraCuota, numeroCuota);
+        }
+
+        var offset = numeroCuota - (cuotasPagadas + 1);
+        var baseDate = fechaPrimeraCuotaPendiente.Value;
+        var targetMonth = baseDate.AddMonths(offset);
+        var day = Math.Min(fechaPrimeraCuota.Day, DateTime.DaysInMonth(targetMonth.Year, targetMonth.Month));
+        return new DateTime(targetMonth.Year, targetMonth.Month, day, 0, 0, 0, DateTimeKind.Utc);
+    }
+
+    public static DateTime CalcularFechaUltimaCuota(
+        DateTime fechaPrimeraCuota,
+        DateTime? fechaPrimeraCuotaPendiente,
+        int cantidadCuotas,
+        int cuotasPagadas)
+    {
+        return CalcularFechaDeCuotaConCorrimiento(fechaPrimeraCuota, fechaPrimeraCuotaPendiente, cuotasPagadas, cantidadCuotas);
+    }
 }

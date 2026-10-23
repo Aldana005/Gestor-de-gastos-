@@ -260,7 +260,7 @@ public class TransactionManager : ITransactionManager
             transaction.CuotasPagadas ??= 0;
             transaction.FechaPrimeraCuota ??= transaction.Fecha;
             transaction.FechaPrimeraCuota = DateTime.SpecifyKind(transaction.FechaPrimeraCuota.Value.Date, DateTimeKind.Utc);
-            transaction.FechaPrimeraCuotaPendiente ??= transaction.FechaPrimeraCuota;
+            // FechaPrimeraCuotaPendiente permanece null a menos que un adelanto corra el calendario (Sección 3.6)
 
             // Se calcula y asigna el valor de la cuota base
             transaction.Monto = CuotaCalculator.CalcularValorCuotaBase(transaction.MontoTotal.Value, transaction.CantidadCuotas.Value);
@@ -328,5 +328,190 @@ public class TransactionManager : ITransactionManager
                 transaction.TarjetaId = null;
             }
         }
+    }
+
+    public async Task<PagoCuota> AdelantarCuotasAsync(int transactionId, int cantidad, CancellationToken ct = default)
+    {
+        var existing = await _transactionStore.GetByIdAsync(transactionId, ct);
+        if (existing == null)
+        {
+            throw new BusinessException($"No se encontró el movimiento con ID {transactionId}.");
+        }
+
+        if (!existing.CantidadCuotas.HasValue || existing.CantidadCuotas.Value <= 1 || !existing.MontoTotal.HasValue)
+        {
+            throw new BusinessException("El movimiento no es una compra en cuotas.");
+        }
+
+        if (cantidad <= 0)
+        {
+            throw new BusinessException("La cantidad de cuotas a adelantar debe ser mayor a 0.");
+        }
+
+        var cuotasPagadasActuales = existing.CuotasPagadas ?? 0;
+        var cuotasRestantes = existing.CantidadCuotas.Value - cuotasPagadasActuales;
+
+        if (cantidad > cuotasRestantes)
+        {
+            throw new BusinessException($"No se pueden adelantar más cuotas de las que faltan. Cuotas restantes: {cuotasRestantes}.");
+        }
+
+        // Calcular el monto total de las cuotas adelantadas
+        var cuotaDesde = cuotasPagadasActuales + 1;
+        var cuotaHasta = cuotasPagadasActuales + cantidad;
+        decimal montoTotalAdelantado = 0m;
+        for (int c = cuotaDesde; c <= cuotaHasta; c++)
+        {
+            montoTotalAdelantado += CuotaCalculator.CalcularValorCuota(existing.MontoTotal.Value, existing.CantidadCuotas.Value, c);
+        }
+
+        // Registrar PagoCuota
+        var pago = new PagoCuota
+        {
+            TransactionId = existing.Id,
+            CantidadCuotas = cantidad,
+            Monto = montoTotalAdelantado,
+            CuotaDesde = cuotaDesde,
+            CuotaHasta = cuotaHasta,
+            FechaPagoUtc = DateTime.UtcNow
+        };
+        await _transactionStore.AddPagoCuotaAsync(pago, ct);
+
+        // Actualizar cuotas pagadas
+        existing.CuotasPagadas = cuotasPagadasActuales + cantidad;
+
+        // Corrimiento de calendario (Sección 3.6):
+        // "Las cuotas restantes se corren: la próxima cuota pendiente pasa al mes siguiente al del pago y las demás la siguen mes a mes."
+        // "Caso borde: si lo adelantado no supera las cuotas que ya correspondían hasta el mes del pago, el calendario no cambia."
+        var fechaPago = DateTimeUtils.GetArgentinaToday();
+        var primeraCuota = existing.FechaPrimeraCuota ?? existing.Fecha;
+
+        // Cuántas cuotas correspondían hasta el mes actual del pago:
+        var mesesHastaPago = ((fechaPago.Year - primeraCuota.Year) * 12) + (fechaPago.Month - primeraCuota.Month);
+        var cuotasQueCorrespondian = Math.Min(existing.CantidadCuotas.Value, Math.Max(0, mesesHastaPago + 1));
+
+        if (existing.CuotasPagadas.Value >= existing.CantidadCuotas.Value)
+        {
+            // Ya se pagaron todas las cuotas
+            existing.FechaPrimeraCuotaPendiente = null;
+        }
+        else if (existing.CuotasPagadas.Value > cuotasQueCorrespondian)
+        {
+            // Superó las cuotas que correspondían: la próxima cuota pendiente pasa al mes siguiente al del pago
+            var proximoMes = new DateTime(fechaPago.Year, fechaPago.Month, 1).AddMonths(1);
+            var maxDays = DateTime.DaysInMonth(proximoMes.Year, proximoMes.Month);
+            var day = Math.Min(primeraCuota.Day, maxDays);
+            existing.FechaPrimeraCuotaPendiente = new DateTime(proximoMes.Year, proximoMes.Month, day, 0, 0, 0, DateTimeKind.Utc);
+        }
+        else
+        {
+            // Caso borde: lo adelantado no supera lo que correspondía hasta este mes: el calendario no cambia
+            var proximaPendienteIndex = existing.CuotasPagadas.Value + 1;
+            existing.FechaPrimeraCuotaPendiente = CuotaCalculator.CalcularFechaCuota(primeraCuota, proximaPendienteIndex);
+        }
+
+        await _transactionStore.UpdateAsync(existing, ct);
+
+        return pago;
+    }
+
+    public async Task<List<PagoCuota>> GetPagosCuotaAsync(int transactionId, CancellationToken ct = default)
+    {
+        return await _transactionStore.GetPagosCuotaAsync(transactionId, ct);
+    }
+
+    public async Task<List<Transaction>> GetPendientesAsync(
+        DateTime? desde,
+        DateTime? hasta,
+        List<int>? categoriaIds,
+        decimal? montoMin,
+        decimal? montoMax,
+        CancellationToken ct = default)
+    {
+        var today = DateTimeUtils.GetArgentinaToday();
+        var desdeUtc = desde.HasValue
+            ? DateTimeUtils.ToCalendarUtc(desde.Value)
+            : DateTimeUtils.GetStartOfMonthUtc(today);
+
+        var hastaUtc = hasta.HasValue
+            ? DateTimeUtils.ToCalendarUtc(hasta.Value)
+            : new DateTime(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month), 23, 59, 59, DateTimeKind.Utc);
+
+        var allGastos = await _transactionStore.GetRawAsync(TipoMovimiento.Gasto, ct);
+
+        // Los fijos NO entran en Pendientes (Sección 3.4 y 3.7)
+        var eventuales = allGastos.Where(t => t.Frecuencia == Frecuencia.Eventual).ToList();
+
+        if (categoriaIds != null && categoriaIds.Count > 0)
+        {
+            eventuales = eventuales.Where(t => categoriaIds.Contains(t.CategoryId)).ToList();
+        }
+
+        // 1. Gastos eventuales sin cuotas, ordenados de mayor a menor monto
+        var sinCuotas = eventuales
+            .Where(t => !t.CantidadCuotas.HasValue || t.CantidadCuotas.Value <= 1)
+            .Where(t => t.Fecha >= desdeUtc && t.Fecha <= hastaUtc)
+            .Where(t => (!montoMin.HasValue || t.Monto >= montoMin.Value) &&
+                        (!montoMax.HasValue || t.Monto <= montoMax.Value))
+            .OrderByDescending(t => t.Monto)
+            .ThenByDescending(t => t.Id)
+            .ToList();
+
+        // 2. Compras en cuotas
+        var comprasEnCuotas = eventuales
+            .Where(t => t.CantidadCuotas.HasValue && t.CantidadCuotas.Value > 1 && t.MontoTotal.HasValue)
+            .ToList();
+
+        var cuotasEnPeriodo = new List<(Transaction Tx, bool TerminaEnPeriodo, decimal ValorCuota)>();
+
+        foreach (var compra in comprasEnCuotas)
+        {
+            var primeraCuota = compra.FechaPrimeraCuota ?? compra.Fecha;
+            var cantidad = compra.CantidadCuotas!.Value;
+            var pagadas = compra.CuotasPagadas ?? 0;
+            var valorCuota = CuotaCalculator.CalcularValorCuotaBase(compra.MontoTotal!.Value, cantidad);
+
+            if (montoMin.HasValue && compra.MontoTotal!.Value < montoMin.Value && valorCuota < montoMin.Value) continue;
+            if (montoMax.HasValue && compra.MontoTotal!.Value > montoMax.Value && valorCuota > montoMax.Value) continue;
+
+            // Verificar si alguna cuota cae dentro del rango [desdeUtc, hastaUtc]
+            bool tieneCuotaEnRango = false;
+            for (int c = 1; c <= cantidad; c++)
+            {
+                var fechaCuota = CuotaCalculator.CalcularFechaDeCuotaConCorrimiento(primeraCuota, compra.FechaPrimeraCuotaPendiente, pagadas, c);
+                if (fechaCuota >= desdeUtc && fechaCuota <= hastaUtc)
+                {
+                    tieneCuotaEnRango = true;
+                    break;
+                }
+            }
+
+            if (tieneCuotaEnRango)
+            {
+                // Verificar si la última cuota cae dentro del período (termina dentro del rango)
+                var fechaUltimaCuota = CuotaCalculator.CalcularFechaUltimaCuota(primeraCuota, compra.FechaPrimeraCuotaPendiente, cantidad, pagadas);
+                bool terminaEnPeriodo = fechaUltimaCuota >= desdeUtc && fechaUltimaCuota <= hastaUtc;
+
+                cuotasEnPeriodo.Add((compra, terminaEnPeriodo, valorCuota));
+            }
+        }
+
+        // Orden de compras en cuotas (Sección 3.7):
+        // a. Primero las que terminan dentro del rango.
+        // b. Después el resto, por cuotas pagadas de mayor a menor (3/6 antes que 1/6).
+        // c. En caso de empate, por valor de la cuota de mayor a menor.
+        var cuotasOrdenadas = cuotasEnPeriodo
+            .OrderByDescending(x => x.TerminaEnPeriodo)
+            .ThenByDescending(x => x.Tx.CuotasPagadas ?? 0)
+            .ThenByDescending(x => x.ValorCuota)
+            .ThenByDescending(x => x.Tx.Id)
+            .Select(x => x.Tx)
+            .ToList();
+
+        var result = new List<Transaction>();
+        result.AddRange(sinCuotas);
+        result.AddRange(cuotasOrdenadas);
+
+        return result;
     }
 }

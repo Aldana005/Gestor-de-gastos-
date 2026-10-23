@@ -21,4 +21,16 @@ public interface ITransactionManager
     Task<Transaction> UpdateAsync(int id, Transaction updatedData, AplicarDesde? aplicarDesde = null, CancellationToken ct = default);
 
     Task DeleteAsync(int id, CancellationToken ct = default);
+
+    Task<PagoCuota> AdelantarCuotasAsync(int transactionId, int cantidad, CancellationToken ct = default);
+
+    Task<List<PagoCuota>> GetPagosCuotaAsync(int transactionId, CancellationToken ct = default);
+
+    Task<List<Transaction>> GetPendientesAsync(
+        DateTime? desde,
+        DateTime? hasta,
+        List<int>? categoriaIds,
+        decimal? montoMin,
+        decimal? montoMax,
+        CancellationToken ct = default);
 }
