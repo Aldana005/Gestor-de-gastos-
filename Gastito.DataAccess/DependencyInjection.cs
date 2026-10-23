@@ -20,6 +20,7 @@ public static class DependencyInjection
         // Register Stores
         services.AddScoped<ICategoryStore, CategoryStore>();
         services.AddScoped<ITarjetaStore, TarjetaStore>();
+        services.AddScoped<ITransactionStore, TransactionStore>();
 
         return services;
     }

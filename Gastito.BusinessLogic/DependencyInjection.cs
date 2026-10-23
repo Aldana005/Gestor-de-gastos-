@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthManager, AuthManager>();
         services.AddScoped<ICategoryManager, CategoryManager>();
         services.AddScoped<ITarjetaManager, TarjetaManager>();
+        services.AddScoped<ITransactionManager, TransactionManager>();
 
         return services;
     }

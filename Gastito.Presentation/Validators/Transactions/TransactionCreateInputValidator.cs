@@ -1,0 +1,59 @@
+using FluentValidation;
+using Gastito.Entities.Enums;
+using Gastito.Presentation.Inputs.Transactions;
+
+namespace Gastito.Presentation.Validators.Transactions;
+
+public class TransactionCreateInputValidator : AbstractValidator<TransactionCreateInput>
+{
+    public TransactionCreateInputValidator()
+    {
+        RuleFor(x => x.Monto)
+            .GreaterThan(0).WithMessage("El monto debe ser mayor a 0.");
+
+        RuleFor(x => x.Descripcion)
+            .NotEmpty().WithMessage("La descripción es obligatoria.")
+            .MaximumLength(250).WithMessage("La descripción no puede superar los 250 caracteres.");
+
+        RuleFor(x => x.Notas)
+            .MaximumLength(1000).WithMessage("Las notas no pueden superar los 1000 caracteres.");
+
+        RuleFor(x => x.CategoryId)
+            .GreaterThan(0).WithMessage("La categoría es obligatoria.");
+
+        RuleFor(x => x.Tipo)
+            .IsInEnum().WithMessage("El tipo de movimiento no es válido (1 = Ingreso, 2 = Gasto).");
+
+        RuleFor(x => x.Frecuencia)
+            .IsInEnum().WithMessage("La frecuencia no es válida (1 = Eventual, 2 = Fijo).");
+
+        When(x => x.Tipo == TipoMovimiento.Gasto, () =>
+        {
+            RuleFor(x => x.MedioPago)
+                .NotNull().WithMessage("El medio de pago es obligatorio para los gastos.")
+                .IsInEnum().WithMessage("El medio de pago no es válido.");
+
+            When(x => x.MedioPago == MedioPago.Tarjeta, () =>
+            {
+                RuleFor(x => x.TarjetaId)
+                    .NotNull().WithMessage("Debe seleccionar una tarjeta cuando el medio de pago es Tarjeta.")
+                    .GreaterThan(0).WithMessage("Debe seleccionar una tarjeta válida.");
+            });
+
+            When(x => x.MedioPago != MedioPago.Tarjeta, () =>
+            {
+                RuleFor(x => x.TarjetaId)
+                    .Null().WithMessage("No se debe especificar tarjeta si el medio de pago no es Tarjeta.");
+            });
+        });
+
+        When(x => x.Tipo == TipoMovimiento.Ingreso, () =>
+        {
+            RuleFor(x => x.MedioPago)
+                .Null().WithMessage("Los ingresos no deben tener medio de pago.");
+
+            RuleFor(x => x.TarjetaId)
+                .Null().WithMessage("Los ingresos no deben tener tarjeta asociada.");
+        });
+    }
+}
