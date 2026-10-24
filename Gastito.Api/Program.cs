@@ -1,82 +1,99 @@
 using Gastito.Presentation;
+using Gastito.Presentation.Middlewares;
 using Microsoft.OpenApi.Models;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register chained layers: Presentation -> BusinessLogic -> DataAccess
-builder.Services.AddPresentation(builder.Configuration);
+// Bind Serilog from appsettings
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext());
 
-// CORS configuration from appsettings
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-                     ?? new[] { "http://localhost:3000", "http://localhost:5173" };
+    // Register chained layers: Presentation -> BusinessLogic -> DataAccess
+    builder.Services.AddPresentation(builder.Configuration);
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("FrontendCorsPolicy", policy =>
+    // CORS configuration from appsettings
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
+                         ?? new[] { "http://localhost:3000", "http://localhost:5173" };
+
+    builder.Services.AddCors(options =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
-});
-
-// Swagger / OpenAPI documentation
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "GASTITO API",
-        Version = "v1",
-        Description = "API REST para registrar y organizar ingresos y gastos - GASTITO"
-    });
-
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        Scheme = "Bearer",
-        BearerFormat = "JWT",
-        In = ParameterLocation.Header,
-        Description = "Ingrese el token JWT devuelto por /api/v1/auth/login"
-    });
-
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
+        options.AddPolicy("FrontendCorsPolicy", policy =>
         {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
     });
-});
 
-var app = builder.Build();
-
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment() || true) // enable Swagger in all local development profiles
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
+    // Swagger / OpenAPI documentation
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen(options =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "GASTITO API v1");
+        options.SwaggerDoc("v1", new OpenApiInfo
+        {
+            Title = "GASTITO API",
+            Version = "v1",
+            Description = "API REST para registrar y organizar ingresos y gastos - GASTITO"
+        });
+
+        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "Bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "Ingrese el token JWT devuelto por /api/v1/auth/login"
+        });
+
+        options.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
     });
-}
 
-app.UseCors("FrontendCorsPolicy");
+    var app = builder.Build();
 
-app.UseAuthentication();
-app.UseAuthorization();
+    // 1. Global Exception Handler Middleware (RFC 7807 ProblemDetails)
+    app.UseGlobalExceptionHandler();
 
-app.MapControllers();
+    // 2. Serilog HTTP Request Logging
+    app.UseSerilogRequestLogging();
 
-app.MapGet("/", () => Results.Redirect("/swagger"));
+    // Configure the HTTP request pipeline
+    if (app.Environment.IsDevelopment() || true) // enable Swagger in all development profiles
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI(c =>
+        {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "GASTITO API v1");
+        });
+    }
 
-app.Run();
+    app.UseCors("FrontendCorsPolicy");
+
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapControllers();
+
+    app.MapGet("/", () => Results.Redirect("/swagger"));
+
+    app.Run();
+
+
+public partial class Program { }
