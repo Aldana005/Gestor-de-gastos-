@@ -13,6 +13,30 @@ services:
       - "5432:5432"
     volumes:
       - gastito_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gastito_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gastito_api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=gastito_db;Username=postgres;Password=postgrespassword
+      Auth__FixedUser__Username: admin
+      Auth__FixedUser__Password: admin
+      Cors__AllowedOrigins__0: http://localhost:3000
+      Cors__AllowedOrigins__1: http://localhost:5173
+    ports:
+      - "8080:8080"
 
 volumes:
   gastito_pgdata:

@@ -93,6 +93,25 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 
     app.MapGet("/", () => Results.Redirect("/swagger"));
 
+    // Apply pending migrations automatically on startup if using relational database (Docker / Production)
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<Gastito.DataAccess.AppDbContext>();
+        if (Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.IsRelational(db.Database))
+        {
+            try
+            {
+                Log.Information("Aplicando migraciones pendientes de base de datos...");
+                Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.Migrate(db.Database);
+                Log.Information("Migraciones aplicadas exitosamente.");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error al aplicar migraciones en el arranque de la API.");
+            }
+        }
+    }
+
     app.Run();
 
 

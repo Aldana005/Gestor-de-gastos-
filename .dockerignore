@@ -1,0 +1,11 @@
+**/.git
+**/.gitignore
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/Logs
+**/TestResults
+**/*.user
+**/*.suo
+RESUMEN_PROYECTO.md
