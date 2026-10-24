@@ -11,7 +11,7 @@
 - **Propósito**: API REST y Web App para educación y control financiero personal (saber cuánto entró, cuánto salió y cuánto se debe en cuotas).
 - **Moneda**: Exclusivamente Pesos Argentinos (**ARS**).
 - **Usuario**: Usuario único fijo (`admin` / `admin`), sin registro de usuarios ni `UserId` en las tablas.
-- **Autenticación**: JWT emitido por `AuthManager` (sin ASP.NET Identity ni refresh token). Todos los endpoints salvo `/auth/login` y `/health` requieren Bearer Token.
+- **Autenticación**: JWT emitido por `AuthManager` (sin ASP.NET Identity ni refresh token). Todos los endpoints salvo `/auth/login`, `/health` y `/telegram/webhook` (protegido por token secreto) requieren Bearer Token.
 - **Manejo de Fechas (UTC)**:
   - **Fecha de movimientos**: Día calendario guardado en UTC a las `00:00:00` (`DateTime.SpecifyKind(fecha.Date, DateTimeKind.Utc)`).
   - **Auditoría** (`CreatedAtUtc`, `DeletedAtUtc`, `FechaPagoUtc`): Hora UTC real (`DateTime.UtcNow`).
@@ -27,25 +27,30 @@ Gastito.Api -> Gastito.Presentation -> Gastito.BusinessLogic -> Gastito.DataAcce
 ```
 
 1. **`Gastito.Entities`**:
-   - Modelos de datos anémicos: `Category`, `Tarjeta`, `Transaction`, `HistorialMonto`, `PagoCuota`.
-   - Enums: `TipoMovimiento` (Ingreso, Gasto), `Frecuencia` (Eventual, Fijo), `MedioPago` (Tarjeta, Efectivo, Transferencia), `TipoTarjeta` (Credito, Debito), `Moneda` (ARS).
+   - Modelos de datos anémicos: `Category`, `Tarjeta`, `Transaction`, `HistorialMonto`, `PagoCuota`, `TelegramConversacion`.
+   - Enums: `TipoMovimiento` (Ingreso, Gasto), `Frecuencia` (Eventual, Fijo), `MedioPago` (Tarjeta, Efectivo, Transferencia), `TipoTarjeta` (Credito, Debito), `Moneda` (ARS), `TelegramEstadoConversacion`.
 2. **`Gastito.DataAccess`**:
    - `AppDbContext` con EF Core 8 (Npgsql) configurado en Docker PostgreSQL.
    - Configuraciones Fluent API en `Configurations/` con **Global Query Filter** para *Soft Delete* (`builder.HasQueryFilter(t => !t.IsDeleted);`).
-   - Stores implementados: `CategoryStore`, `TarjetaStore`, `TransactionStore`.
+   - Stores implementados: `CategoryStore`, `TarjetaStore`, `TransactionStore`, `TelegramConversacionStore`.
 3. **`Gastito.BusinessLogic`**:
-   - Managers con validaciones y reglas de negocio: `AuthManager`, `CategoryManager`, `TarjetaManager`, `TransactionManager`.
+   - Managers con validaciones y reglas de negocio: `AuthManager`, `CategoryManager`, `TarjetaManager`, `TransactionManager`, `DashboardManager`, `ReportesManager`.
+   - Servicios: `TelegramBotService` (parseo de texto directo, flujo conversacional guiado con botones, seguridad por `AuthorizedChatId`).
    - Excepciones de negocio personalizadas: `BusinessException`.
 4. **`Gastito.Presentation`**:
-   - Controllers: `AuthController`, `CategoriasController`, `TarjetasController`, `MovimientosController`, `HealthController`.
-   - DTOs / Inputs: `CategoryCreateInput`, `TransactionCreateInput`, `TransactionUpdateInput`, `TransactionFilterInput`, etc.
-   - Outputs: `TransactionOutput`, `PagedResult<T>`, `CategoryOutput`, `TarjetaOutput`.
+   - Controllers: `AuthController`, `CategoriasController`, `TarjetasController`, `MovimientosController`, `DashboardController`, `ReportesController`, `PendientesController`, `TelegramController`, `HealthController`.
+   - DTOs / Inputs: `CategoryCreateInput`, `TransactionCreateInput`, `TransactionUpdateInput`, `TransactionFilterInput`, `TelegramUpdate`, etc.
+   - Outputs: `TransactionOutput`, `PagedResult<T>`, `CategoryOutput`, `TarjetaOutput`, `DashboardOutput`, `ReportesOutput`, `TelegramBotResponse`.
+   - Middlewares: `GlobalExceptionHandlerMiddleware` (formato RFC 7807 `ProblemDetails` para `BusinessException`, `KeyNotFoundException` y 500 no controladas con `traceId`).
    - Validaciones: `FluentValidation` en capa Presentation para validar contratos de entrada.
-   - Errores de API: Formato RFC 7807 `ProblemDetails` y `HttpValidationProblemDetails`.
 5. **`Gastito.Api`**:
    - Arranque, configuración de Swagger/OpenAPI con Bearer auth, CORS habilitado para frontend local (`localhost:3000`, `localhost:5173`).
+   - Logging estructurado con **Serilog** (`UseSerilogRequestLogging`, enrichers de proceso, máquina y contexto, salidas a consola y archivo).
+   - Auto-migración en arranque (`Migrate()`) para entornos relacionales (Docker/PostgreSQL).
 6. **`Gastito.Tests`**:
-   - Proyecto xUnit con base de datos en memoria (`Microsoft.EntityFrameworkCore.InMemory`) y pruebas de validaciones con FluentValidation TestHelper.
+   - Proyecto xUnit con 96 pruebas automatizadas:
+     - Tests unitarios de managers, validadores, cálculo de cuotas y middleware.
+     - Tests de integración E2E con `WebApplicationFactory<Program>` (login, endpoints protegidos, ProblemDetails y webhook de Telegram).
 
 ---
 
@@ -58,53 +63,68 @@ Gastito.Api -> Gastito.Presentation -> Gastito.BusinessLogic -> Gastito.DataAcce
 | **2** | Login | ✅ Completada | Usuario fijo en configuración, `AuthManager`, JWT Bearer, protección de endpoints. |
 | **3** | Categorías y Tarjetas | ✅ Completada | CRUD completo, seed no editable/borrable, validación de no borrado si existen movimientos asociados. |
 | **4** | Movimientos básicos | ✅ Completada | CRUD en `/api/v1/movimientos`, paginación (`PagedResult`), filtros por fecha/tipo/categorías, medios de pago condicionales, validación de categoría por tipo, soft delete auditado. |
-| **5** | Fijos | ✅ Completada | Movimientos recurrentes (mensuales), `FechaInicio` y `FechaFin`, sin cuotas, historial de montos (`HistorialMonto`), actualización con `aplicarDesde = MesActual | MesSiguiente`, ocurrencias mensuales en consultas. |
+| **5** | Fijos | ✅ Completada | Movimientos recurrentes (mensuales), `FechaInicio` y `FechaFin`, sin cuotas, historial de montos (`HistorialMonto`), actualización con `aplicarDesde = MesActual \| MesSiguiente`, ocurrencias mensuales en consultas. |
 | **6** | Cuotas | ✅ Completada | Gastos en cuotas (tarjeta de crédito), cálculo de valor de cuota con absorción de redondeo en la última cuota, inicialización de calendario de cuotas, `CuotaCalculator`, validaciones estrictas y protección de compras con pagos. |
 | **7** | Pendientes y adelantar | ✅ Completada | Endpoint `/api/v1/pendientes` con orden especificado (eventuales primero por monto desc, luego compras en cuotas que terminan en período, por cuotas pagadas desc y valor de cuota desc); botón "Adelantar" (`POST /movimientos/{id}/cuotas/adelantar`), corrimiento de calendario de cuotas e historial en `PagoCuota`. |
 | **8** | Dashboard y Reportes | ✅ Completada | **Dashboard (`/api/v1/dashboard?meses=3`)** con totales del mes actual, monto pendiente, torta por categoría, gráfico de líneas de ingresos vs gastos (3 a 12 meses) y próximas deudas; **Reportes (`/api/v1/reportes/resumen`)** con filtros por rango de fechas y categorías. |
-| **9** | **Calidad** | ⏳ **SIGUIENTE FASE** | **Middleware global de excepciones (RFC 7807 ProblemDetails)**, logging estructurado con Serilog, tests unitarios e integración adicionales con `WebApplicationFactory`. |
-| **10**| Dockerizar la API | ⏳ Pendiente | Dockerfile multi-stage y docker-compose completo (API + PostgreSQL). |
-| **11**| Telegram | ⏳ Pendiente | `TelegramBotService`, webhook, interacción mediante botones. |
+| **9** | Calidad | ✅ Completada | **Middleware global de excepciones (RFC 7807 ProblemDetails)**, logging estructurado con **Serilog**, tests de integración E2E con `WebApplicationFactory`. |
+| **10**| Dockerizar la API | ✅ Completada | **Dockerfile multi-stage**, docker-compose completo (API + PostgreSQL con healthcheck), auto-migración relacional en arranque y `.dockerignore`. |
+| **11**| Telegram | ✅ Completada | **`TelegramBotService`** con parseo de formato directo (`ingreso/gasto monto categoría`, `gasto monto comentario cuotas`), flujo conversacional con botones interactivos, webhook seguro con header `X-Telegram-Bot-Api-Secret-Token` y control de `AuthorizedChatId`. |
 
 ---
 
-## 4. Guía Detallada para la Próxima Sesión: FASE 9 (Calidad)
+## 4. Guía Detallada para la Próxima Sesión: FRONTEND WEB (Antigravity)
 
-### Requerimientos de la Fase 9 (Secciones 8, 9, 10 y 12 del Documento de Decisiones):
-1. **Middleware Global de Excepciones**:
-   - Captura de `BusinessException` retornando HTTP 400 Bad Request en formato `ProblemDetails` RFC 7807 (`type`, `title`, `status`, `detail`, `instance`).
-   - Captura de excepciones no controladas retornando HTTP 500 Internal Server Error en formato `ProblemDetails` sin fugar stack traces en producción.
-   - Preservar consistencia de respuestas con `HttpValidationProblemDetails` generado por validaciones de FluentValidation.
-2. **Logging Estructurado con Serilog**:
-   - Configuración en `Program.cs` / `appsettings.json` con enriquecedores (`FromLogContext`, `WithMachineName`, `WithProcessId`).
-   - Salida estructurada a consola (y/o archivo según configuración).
-   - Sustituir logging por defecto con Serilog en pipeline ASP.NET Core (`UseSerilogRequestLogging`).
-3. **Tests de Integración con `WebApplicationFactory`**:
-   - Pruebas E2E de endpoints protegidos con autenticación JWT contra la API en memoria.
-   - Validación de respuestas `ProblemDetails` ante errores de negocio y errores 404/401/400.
+### Requerimientos del Frontend (Secciones 4, 5 y 13 del Documento de Decisiones):
+1. **Pila Tecnológica**:
+   - HTML, CSS Vanilla con Tokens de diseño centralizados (`tokens.css` para colores, tipografía, espaciado y tema visual intercambiable sin tocar componentes).
+   - SPA moderna (React / TypeScript / Vite).
+   - Librería de gráficos ligeros (ej. Chart.js / Recharts) para tortas y gráfico de líneas (3 a 12 meses).
+2. **Mapa de Pantallas**:
+   - **Login**: Logo, usuario, contraseña (`admin` / `admin`), feedback de error.
+   - **Dashboard Principal**:
+     - Tarjetas del mes actual: Total Ingresos ("Este mes"), Total Gastos ("Este mes"), Monto Pendiente en cuotas.
+     - Gráfico de torta de gastos por categoría (solo con monto en el mes).
+     - Gráfico de líneas (ingresos vs gastos) con selector de meses (3 a 12).
+     - Listado de "Próximas deudas" con botón "Ver más".
+     - Botón flotante "+" para nuevo movimiento.
+     - Enlace a pantalla de Reportes y menú.
+   - **Popup de Carga ("+")**:
+     - Pestañas Ingreso / Gasto.
+     - Ingreso: monto, categoría (+ botón crear nueva), frecuencia (Fijo/Eventual), fecha, fecha fin (si fijo), descripción, notas.
+     - Gasto: medio de pago (Efectivo/Transferencia/Tarjeta), selección de tarjeta (+ crear nueva), opción cuotas (si tarjeta de crédito), categoría (+ crear nueva), fecha, descripción, notas.
+   - **Reportes y Movimientos**:
+     - Filtros interactivos por rango de fechas y categorías (selección múltiple).
+     - Tarjetas de totales ("del período").
+     - Torta de gastos del período.
+     - Tabla/lista de últimos movimientos paginados con opciones de editar y borrar (soft delete).
+     - Próximas deudas del período.
+   - **Pendientes y Adelantar Cuotas**:
+     - Listado ordenado con desglose de progreso (ej. 3/6), valor de cuota.
+     - Botón "Adelantar" cuotas con selector numérico, validación de cuotas restantes e historial de pagos.
+3. **Reglas del Cliente**:
+   - Moneda formateada en Pesos Argentinos: `$ 1.234,56`.
+   - Fechas en formato `dd/mm/aaaa`.
+   - Manejo de token Bearer en `Authorization: Bearer <token>`, redirección al login ante 401.
+   - Manejo de respuestas `ProblemDetails` para errores de validación y de negocio.
 
 ---
 
 ## 5. Comandos de Trabajo Rápido
 
 ```powershell
-# Ejecutar la suite completa de tests
+# Ejecutar la suite completa de tests (96/96 pasando)
 dotnet test
 
 # Compilar toda la solución
 dotnet build
 
-# Iniciar contenedor de base de datos PostgreSQL si se requiere
-docker compose up -d
+# Levantar toda la infraestructura en contenedores (API + PostgreSQL)
+docker compose up -d --build
 
-# Convención de ramas para la Fase 9:
-git checkout -b fase-9-calidad
-# ... al terminar y verificar tests:
-git commit -m "Fase 9: Calidad - ..."
-git checkout main
-git merge fase-9-calidad
+# Iniciar la API localmente en desarrollo
+dotnet run --project Gastito.Api
 ```
 
 ---
-*Última actualización: Cierre de Fase 8 (75/75 tests pasando).*
-
+*Última actualización: Cierre de Fase 11 (96/96 tests pasando).*
