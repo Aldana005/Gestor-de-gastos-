@@ -10,11 +10,13 @@ export const getStoredToken = (): string | null => {
 export const setStoredAuth = (token: string, expiraEnUtc: string) => {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(EXPIRY_KEY, expiraEnUtc);
+  window.dispatchEvent(new Event('auth-change'));
 };
 
 export const clearStoredAuth = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(EXPIRY_KEY);
+  window.dispatchEvent(new Event('auth-change'));
 };
 
 export class ApiError extends Error {
