@@ -1,0 +1,194 @@
+@import './styles/tokens.css';
+
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: linear-gradient(180deg, var(--bg-gradient-from) 0%, var(--bg-gradient-to) 100%);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* Focus visible accessibility requirement */
+  :focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 2px;
+  }
+
+  /* Custom subtle scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(4, 32, 46, 0.4);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(152, 213, 238, 0.3);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(79, 179, 218, 0.6);
+  }
+}
+
+@layer components {
+  /* Glassmorphism Card (Estilo Nexora) */
+  .glass-card {
+    background: var(--glass-card-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-card-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-soft);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .glass-card-hover {
+    transition: all 0.25s ease;
+  }
+  .glass-card-hover:hover {
+    background: var(--glass-card-bg-hover);
+    border-color: var(--glass-card-border-active);
+    transform: translateY(-2px);
+  }
+
+  /* Glass Input & Select */
+  .glass-input {
+    background: rgba(4, 32, 46, 0.55);
+    border: 1px solid rgba(152, 213, 238, 0.22);
+    border-radius: 14px;
+    color: var(--text-primary);
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    width: 100%;
+    min-height: 44px;
+    transition: all 0.2s ease;
+  }
+  .glass-input:focus {
+    outline: none;
+    border-color: var(--brand-500);
+    box-shadow: 0 0 0 3px rgba(79, 179, 218, 0.25);
+    background: rgba(4, 32, 46, 0.75);
+  }
+  .glass-input::placeholder {
+    color: rgba(152, 213, 238, 0.45);
+  }
+
+  /* Primary Button (44px min height for touch) */
+  .btn-primary {
+    background: var(--action-primary-bg);
+    color: var(--action-primary-text);
+    font-weight: 600;
+    min-height: 44px;
+    padding: 10px 20px;
+    border-radius: var(--radius-pill);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 14px rgba(79, 179, 218, 0.3);
+    cursor: pointer;
+    border: none;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--action-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(79, 179, 218, 0.4);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Secondary / Ghost Button */
+  .btn-secondary {
+    background: rgba(152, 213, 238, 0.12);
+    color: var(--text-primary);
+    font-weight: 500;
+    min-height: 44px;
+    padding: 10px 18px;
+    border-radius: var(--radius-pill);
+    border: 1px solid rgba(152, 213, 238, 0.25);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: rgba(152, 213, 238, 0.2);
+    border-color: rgba(152, 213, 238, 0.4);
+    color: #ffffff;
+  }
+
+  /* Pill Chips */
+  .pill-chip {
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+
+  /* Shimmer animation for Skeletons */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(15, 94, 131, 0.25) 0%,
+      rgba(79, 179, 218, 0.20) 50%,
+      rgba(15, 94, 131, 0.25) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Animations for dialogs & page transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

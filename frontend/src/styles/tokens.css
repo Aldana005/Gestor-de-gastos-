@@ -1,0 +1,72 @@
+/* Sistema de Tokens Centralizado - GASTITO
+   Basado en la paleta oficial "Небо" (Holst) y estilo "Nexora"
+   Concentra todos los valores de diseño para poder cambiarlos sin tocar componentes.
+*/
+
+:root {
+  /* Paleta Base Oficial Holst (7 tonalidades) */
+  --brand-900: #04202E; /* Más oscuro */
+  --brand-800: #0A3C55;
+  --brand-700: #0F5E83;
+  --brand-600: #1786B4;
+  --brand-500: #4FB3DA; /* Acciones principales y activo */
+  --brand-300: #98D5EE; /* Texto secundario y bordes */
+  --brand-100: #E1F2FA; /* Texto principal (más claro) */
+
+  /* Colores Semánticos (solo para significado, siempre con signo/ícono) */
+  --color-income: #3DDC97;       /* Verde menta: Ingreso / éxito */
+  --color-income-bg: rgba(61, 220, 151, 0.12);
+  --color-income-border: rgba(61, 220, 151, 0.3);
+
+  --color-expense: #FF6B6B;      /* Coral: Gasto / error / peligro */
+  --color-expense-bg: rgba(255, 107, 107, 0.12);
+  --color-expense-border: rgba(255, 107, 107, 0.3);
+
+  --color-warning: #FFC857;      /* Ámbar: Aviso / advertencia */
+  --color-warning-bg: rgba(255, 200, 87, 0.12);
+  --color-warning-border: rgba(255, 200, 87, 0.3);
+
+  /* Fondos y Efecto Vidrio (Glassmorphism estilo Nexora) */
+  --bg-gradient-from: #04202E;
+  --bg-gradient-to: #0A3C55;
+  
+  --glass-card-bg: rgba(15, 94, 131, 0.38);
+  --glass-card-bg-hover: rgba(15, 94, 131, 0.52);
+  --glass-card-border: rgba(152, 213, 238, 0.20);
+  --glass-card-border-active: rgba(79, 179, 218, 0.55);
+  --glass-card-inner: rgba(4, 32, 46, 0.35);
+  --glass-blur: 16px;
+
+  /* Textos */
+  --text-primary: #E1F2FA;
+  --text-secondary: #98D5EE;
+  --text-muted: rgba(152, 213, 238, 0.65);
+  --text-inverse: #04202E;
+
+  /* Acciones y Elementos Interactivos */
+  --action-primary-bg: #4FB3DA;
+  --action-primary-text: #04202E;
+  --action-primary-hover: #67c2e5;
+
+  /* Esquinas redondeadas (16-24px) */
+  --radius-sm: 12px;
+  --radius-card: 20px;
+  --radius-card-lg: 24px;
+  --radius-pill: 9999px;
+
+  /* Sombras */
+  --shadow-soft: 0 8px 32px 0 rgba(4, 32, 46, 0.5);
+  --shadow-glow: 0 0 20px rgba(79, 179, 218, 0.25);
+  --shadow-floating: 0 10px 25px -5px rgba(79, 179, 218, 0.35);
+
+  /* Paleta para Categorías (Gráfico de torta de 7 tonos + variantes con contraste AA) */
+  --cat-1: #4FB3DA;
+  --cat-2: #1786B4;
+  --cat-3: #98D5EE;
+  --cat-4: #3DDC97;
+  --cat-5: #FFC857;
+  --cat-6: #FF6B6B;
+  --cat-7: #2BC48A;
+  --cat-8: #62C6EC;
+  --cat-9: #0F5E83;
+}
