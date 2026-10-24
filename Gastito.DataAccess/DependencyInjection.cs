@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ICategoryStore, CategoryStore>();
         services.AddScoped<ITarjetaStore, TarjetaStore>();
         services.AddScoped<ITransactionStore, TransactionStore>();
+        services.AddSingleton<ITelegramConversacionStore, TelegramConversacionStore>();
 
         return services;
     }

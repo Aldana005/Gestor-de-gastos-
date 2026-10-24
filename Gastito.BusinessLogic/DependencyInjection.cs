@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<ITransactionManager, TransactionManager>();
         services.AddScoped<IDashboardManager, DashboardManager>();
         services.AddScoped<IReportesManager, ReportesManager>();
+        services.AddScoped<ITelegramBotService, Gastito.BusinessLogic.Services.TelegramBotService>();
 
         return services;
     }
