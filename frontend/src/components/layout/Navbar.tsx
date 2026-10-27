@@ -75,18 +75,18 @@ export const DesktopSidebar: React.FC = () => {
   return (
     <aside
       className={`hidden md:flex flex-col border-r border-brand-300/15 bg-brand-900/60 backdrop-blur-md min-h-[calc(100vh-61px)] shrink-0 transition-all duration-300 ease-in-out relative ${
-        isCollapsed ? 'w-20 p-3 items-center' : 'w-56 p-4'
+        isCollapsed ? 'w-14 px-1.5 py-3 items-center' : 'w-48 p-3'
       }`}
       aria-label="Navegación lateral escritorio"
     >
       {/* Cabecera del sidebar: Título y botón colapsar */}
       <div
-        className={`flex items-center mb-4 ${
-          isCollapsed ? 'justify-center w-full' : 'justify-between w-full'
+        className={`flex items-center mb-3 ${
+          isCollapsed ? 'justify-center w-full' : 'justify-between w-full px-1'
         }`}
       >
         {!isCollapsed && (
-          <p className="px-2 text-xs font-semibold uppercase tracking-wider text-text-muted select-none">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted select-none">
             Principal
           </p>
         )}
@@ -94,7 +94,7 @@ export const DesktopSidebar: React.FC = () => {
           type="button"
           onClick={toggleSidebar}
           title={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
-          className="p-1.5 rounded-xl text-text-muted hover:text-brand-300 hover:bg-brand-800/60 border border-brand-300/10 hover:border-brand-300/25 transition-all flex items-center justify-center cursor-pointer"
+          className="p-1 rounded-lg text-text-muted hover:text-brand-300 hover:bg-brand-800/60 border border-brand-300/10 hover:border-brand-300/25 transition-all flex items-center justify-center cursor-pointer"
           aria-label={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
         >
           {isCollapsed ? (
@@ -106,7 +106,7 @@ export const DesktopSidebar: React.FC = () => {
       </div>
 
       {/* Lista de navegación */}
-      <nav className="space-y-2 w-full" aria-label="Menú principal">
+      <nav className="space-y-1.5 w-full flex flex-col items-center" aria-label="Menú principal">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
@@ -114,8 +114,8 @@ export const DesktopSidebar: React.FC = () => {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `group relative flex items-center rounded-2xl font-medium text-sm transition-all duration-200 min-h-touch ${
-                  isCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'gap-3 px-3.5 py-2.5'
+                `group relative flex items-center rounded-xl font-medium transition-all duration-200 ${
+                  isCollapsed ? 'justify-center w-10 h-10' : 'w-full gap-2.5 px-3 py-2 text-xs sm:text-sm'
                 } ${
                   isActive
                     ? 'bg-brand-500 text-brand-900 font-semibold shadow-glow'
@@ -126,7 +126,7 @@ export const DesktopSidebar: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <Icon
-                    className={`w-5 h-5 shrink-0 transition-transform ${
+                    className={`w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0 transition-transform ${
                       isActive ? 'text-brand-900 stroke-[2.5]' : 'text-brand-300 group-hover:scale-110'
                     }`}
                     aria-hidden="true"
@@ -135,9 +135,9 @@ export const DesktopSidebar: React.FC = () => {
                     <span className="truncate">{item.label}</span>
                   )}
 
-                  {/* Tooltip flyout en modo colapsado (según referencia del usuario) */}
+                  {/* Tooltip flyout en modo colapsado */}
                   {isCollapsed && (
-                    <div className="absolute left-full ml-3 px-3 py-1.5 rounded-xl bg-brand-800 text-xs font-semibold text-text-primary shadow-2xl border border-brand-300/25 whitespace-nowrap opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-2 pointer-events-none transition-all duration-200 z-50">
+                    <div className="absolute left-full ml-2.5 px-2.5 py-1.5 rounded-xl bg-brand-800 text-xs font-semibold text-text-primary shadow-2xl border border-brand-300/25 whitespace-nowrap opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-2 pointer-events-none transition-all duration-200 z-50">
                       {item.label}
                       <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-brand-800" />
                     </div>
@@ -150,25 +150,25 @@ export const DesktopSidebar: React.FC = () => {
       </nav>
 
       {/* Sección inferior: Moneda del sistema */}
-      <div className="mt-auto w-full pt-4">
+      <div className="mt-auto w-full pt-3">
         {isCollapsed ? (
           <div className="group relative flex justify-center">
-            <div className="w-10 h-10 rounded-2xl bg-brand-800/60 border border-brand-300/15 flex items-center justify-center text-brand-300 hover:text-brand-100 transition-colors cursor-default">
+            <div className="w-9 h-9 rounded-xl bg-brand-800/60 border border-brand-300/15 flex items-center justify-center text-brand-300 hover:text-brand-100 transition-colors cursor-default">
               <Coins className="w-4 h-4 text-income" />
             </div>
             {/* Tooltip flyout */}
-            <div className="absolute left-full ml-3 px-3 py-1.5 rounded-xl bg-brand-800 text-xs font-medium text-text-primary shadow-2xl border border-brand-300/25 whitespace-nowrap opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-2 pointer-events-none transition-all duration-200 z-50">
+            <div className="absolute left-full ml-2.5 px-2.5 py-1.5 rounded-xl bg-brand-800 text-xs font-medium text-text-primary shadow-2xl border border-brand-300/25 whitespace-nowrap opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-2 pointer-events-none transition-all duration-200 z-50">
               <p className="font-semibold text-text-primary">Moneda del sistema</p>
               <p className="text-brand-300 text-[11px]">Pesos Argentinos (ARS)</p>
               <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-brand-800" />
             </div>
           </div>
         ) : (
-          <div className="p-3 rounded-2xl bg-brand-800/40 border border-brand-300/15 text-xs text-text-secondary">
-            <p className="font-semibold text-text-primary mb-1 text-[11px]">Moneda del sistema</p>
+          <div className="p-2.5 rounded-xl bg-brand-800/40 border border-brand-300/15 text-xs text-text-secondary">
+            <p className="font-semibold text-text-primary mb-0.5 text-[11px]">Moneda</p>
             <p className="flex items-center gap-1.5 text-brand-300 text-[11px]">
-              <span className="w-2 h-2 rounded-full bg-income shrink-0" />
-              <span className="truncate">Pesos Argentinos (ARS)</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-income shrink-0" />
+              <span className="truncate">Pesos ARS</span>
             </p>
           </div>
         )}
