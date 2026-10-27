@@ -142,7 +142,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div>
-            <p className="text-2xl sm:text-3xl font-extrabold text-income tracking-tight">
+            <p className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-income tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
               +{formatCurrencyARS(totalIngresos)}
             </p>
             <p className="text-[11px] text-text-muted mt-1">Este mes</p>
@@ -160,7 +160,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div>
-            <p className="text-2xl sm:text-3xl font-extrabold text-expense tracking-tight">
+            <p className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-expense tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
               −{formatCurrencyARS(totalGastos)}
             </p>
             <p className="text-[11px] text-text-muted mt-1">Este mes</p>
@@ -183,7 +183,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div>
-            <p className="text-2xl sm:text-3xl font-extrabold text-warning tracking-tight">
+            <p className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-warning tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
               {formatCurrencyARS(montoPendiente)}
             </p>
             <p className="text-[11px] text-brand-300 flex items-center gap-1 mt-1 group-hover:text-brand-100 transition-colors">

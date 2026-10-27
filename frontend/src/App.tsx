@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ModalProvider } from './context/ModalContext';
+import { SidebarProvider } from './context/SidebarContext';
 import { Layout } from './components/layout/Layout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
@@ -38,8 +39,9 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ModalProvider>
-          <BrowserRouter>
+        <SidebarProvider>
+          <ModalProvider>
+            <BrowserRouter>
             <Routes>
               {/* Ruta pública: Login */}
               <Route
@@ -70,7 +72,8 @@ export function App() {
             </Routes>
           </BrowserRouter>
         </ModalProvider>
-      </AuthProvider>
+      </SidebarProvider>
+    </AuthProvider>
     </QueryClientProvider>
   );
 }

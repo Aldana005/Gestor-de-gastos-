@@ -12,10 +12,10 @@ export const Layout: React.FC = () => {
     <div className="min-h-screen min-h-[100dvh] flex flex-col bg-brand-900 text-text-primary selection:bg-brand-500 selection:text-brand-900">
       <Header />
 
-      <div className="flex-1 flex w-full max-w-7xl mx-auto">
+      <div className="flex-1 flex w-full max-w-[1440px] mx-auto">
         <DesktopSidebar />
 
-        <main className="flex-1 px-4 py-5 sm:px-6 sm:py-7 md:px-8 max-w-full pb-28 md:pb-12 overflow-x-hidden">
+        <main className="flex-1 px-4 py-5 sm:px-6 sm:py-7 md:px-8 max-w-full pb-28 md:pb-12 overflow-x-hidden min-w-0 transition-all duration-300">
           <Outlet />
         </main>
       </div>

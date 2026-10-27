@@ -1,6 +1,14 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Clock, BarChart3 } from 'lucide-react';
+import {
+  Home,
+  Clock,
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+} from 'lucide-react';
+import { useSidebar } from '../../context/SidebarContext';
 
 export const NAV_ITEMS = [
   {
@@ -62,15 +70,43 @@ export const BottomNav: React.FC = () => {
 };
 
 export const DesktopSidebar: React.FC = () => {
+  const { isCollapsed, toggleSidebar } = useSidebar();
+
   return (
     <aside
-      className="hidden md:flex flex-col w-64 border-r border-brand-300/15 bg-brand-900/60 backdrop-blur-md min-h-[calc(100vh-61px)] p-4 shrink-0"
+      className={`hidden md:flex flex-col border-r border-brand-300/15 bg-brand-900/60 backdrop-blur-md min-h-[calc(100vh-61px)] shrink-0 transition-all duration-300 ease-in-out relative ${
+        isCollapsed ? 'w-20 p-3 items-center' : 'w-56 p-4'
+      }`}
       aria-label="Navegación lateral escritorio"
     >
-      <div className="space-y-1.5">
-        <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
-          Principal
-        </p>
+      {/* Cabecera del sidebar: Título y botón colapsar */}
+      <div
+        className={`flex items-center mb-4 ${
+          isCollapsed ? 'justify-center w-full' : 'justify-between w-full'
+        }`}
+      >
+        {!isCollapsed && (
+          <p className="px-2 text-xs font-semibold uppercase tracking-wider text-text-muted select-none">
+            Principal
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          title={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+          className="p-1.5 rounded-xl text-text-muted hover:text-brand-300 hover:bg-brand-800/60 border border-brand-300/10 hover:border-brand-300/25 transition-all flex items-center justify-center cursor-pointer"
+          aria-label={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="w-4 h-4 text-brand-300" />
+          ) : (
+            <ChevronLeft className="w-4 h-4 text-brand-300" />
+          )}
+        </button>
+      </div>
+
+      {/* Lista de navegación */}
+      <nav className="space-y-2 w-full" aria-label="Menú principal">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
@@ -78,9 +114,11 @@ export const DesktopSidebar: React.FC = () => {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3.5 py-3 rounded-2xl font-medium text-sm transition-all duration-200 min-h-touch ${
+                `group relative flex items-center rounded-2xl font-medium text-sm transition-all duration-200 min-h-touch ${
+                  isCollapsed ? 'justify-center px-0 w-11 h-11 mx-auto' : 'gap-3 px-3.5 py-2.5'
+                } ${
                   isActive
-                    ? 'bg-brand-500 text-brand-900 font-semibold shadow-glow translate-x-1'
+                    ? 'bg-brand-500 text-brand-900 font-semibold shadow-glow'
                     : 'text-text-secondary hover:text-text-primary hover:bg-brand-800/40'
                 }`
               }
@@ -88,25 +126,52 @@ export const DesktopSidebar: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <Icon
-                    className={`w-5 h-5 ${
-                      isActive ? 'text-brand-900 stroke-[2.5]' : 'text-brand-300'
+                    className={`w-5 h-5 shrink-0 transition-transform ${
+                      isActive ? 'text-brand-900 stroke-[2.5]' : 'text-brand-300 group-hover:scale-110'
                     }`}
                     aria-hidden="true"
                   />
-                  <span>{item.label}</span>
+                  {!isCollapsed && (
+                    <span className="truncate">{item.label}</span>
+                  )}
+
+                  {/* Tooltip flyout en modo colapsado (según referencia del usuario) */}
+                  {isCollapsed && (
+                    <div className="absolute left-full ml-3 px-3 py-1.5 rounded-xl bg-brand-800 text-xs font-semibold text-text-primary shadow-2xl border border-brand-300/25 whitespace-nowrap opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-2 pointer-events-none transition-all duration-200 z-50">
+                      {item.label}
+                      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-brand-800" />
+                    </div>
+                  )}
                 </>
               )}
             </NavLink>
           );
         })}
-      </div>
+      </nav>
 
-      <div className="mt-auto p-4 rounded-2xl bg-brand-800/40 border border-brand-300/15 text-xs text-text-secondary">
-        <p className="font-semibold text-text-primary mb-1">Moneda del sistema</p>
-        <p className="flex items-center gap-1.5 text-brand-300">
-          <span className="w-2 h-2 rounded-full bg-income" />
-          Pesos Argentinos (ARS)
-        </p>
+      {/* Sección inferior: Moneda del sistema */}
+      <div className="mt-auto w-full pt-4">
+        {isCollapsed ? (
+          <div className="group relative flex justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-brand-800/60 border border-brand-300/15 flex items-center justify-center text-brand-300 hover:text-brand-100 transition-colors cursor-default">
+              <Coins className="w-4 h-4 text-income" />
+            </div>
+            {/* Tooltip flyout */}
+            <div className="absolute left-full ml-3 px-3 py-1.5 rounded-xl bg-brand-800 text-xs font-medium text-text-primary shadow-2xl border border-brand-300/25 whitespace-nowrap opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-2 pointer-events-none transition-all duration-200 z-50">
+              <p className="font-semibold text-text-primary">Moneda del sistema</p>
+              <p className="text-brand-300 text-[11px]">Pesos Argentinos (ARS)</p>
+              <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-brand-800" />
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 rounded-2xl bg-brand-800/40 border border-brand-300/15 text-xs text-text-secondary">
+            <p className="font-semibold text-text-primary mb-1 text-[11px]">Moneda del sistema</p>
+            <p className="flex items-center gap-1.5 text-brand-300 text-[11px]">
+              <span className="w-2 h-2 rounded-full bg-income shrink-0" />
+              <span className="truncate">Pesos Argentinos (ARS)</span>
+            </p>
+          </div>
+        )}
       </div>
     </aside>
   );

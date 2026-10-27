@@ -296,7 +296,7 @@ export const Reportes: React.FC = () => {
                 <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Total Ingresos del Período
                 </span>
-                <p className="text-2xl sm:text-3xl font-extrabold text-income tracking-tight mt-1">
+                <p className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-income tracking-tight mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
                   +{formatCurrencyARS(resumenData.totalIngresos)}
                 </p>
                 <p className="text-[11px] text-text-muted mt-1">
@@ -313,7 +313,7 @@ export const Reportes: React.FC = () => {
                 <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   Total Gastos del Período
                 </span>
-                <p className="text-2xl sm:text-3xl font-extrabold text-expense tracking-tight mt-1">
+                <p className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-expense tracking-tight mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
                   −{formatCurrencyARS(resumenData.totalGastos)}
                 </p>
                 <p className="text-[11px] text-text-muted mt-1">

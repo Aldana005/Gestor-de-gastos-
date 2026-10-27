@@ -9,16 +9,16 @@
  * Formatea un número como pesos argentinos: $ 1.234,56
  */
 export function formatCurrencyARS(value: number | string | null | undefined): string {
-  if (value === null || value === undefined || value === '') return '$ 0,00';
+  if (value === null || value === undefined || value === '') return '$\u00A00,00';
   const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num)) return '$ 0,00';
+  if (isNaN(num)) return '$\u00A00,00';
 
   const parts = Math.abs(num).toFixed(2).split('.');
   const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   const decimalPart = parts[1];
   const sign = num < 0 ? '-' : '';
 
-  return `${sign}$ ${integerPart},${decimalPart}`;
+  return `${sign}$\u00A0${integerPart},${decimalPart}`;
 }
 
 /**

@@ -1,10 +1,12 @@
 import React from 'react';
-import { LogOut, Database, RefreshCw } from 'lucide-react';
+import { LogOut, Database, RefreshCw, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { useSidebar } from '../../context/SidebarContext';
 import { apiService } from '../../api/apiService';
 
 export const Header: React.FC = () => {
   const { logout } = useAuth();
+  const { isCollapsed, toggleSidebar } = useSidebar();
   const isMock = apiService.isMock();
 
   const handleResetMock = () => {
@@ -16,9 +18,23 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-30 w-full backdrop-blur-md bg-brand-900/75 border-b border-brand-300/15 px-4 sm:px-6 py-3 transition-colors">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Logo provisorio: Wordmark GASTITO */}
+      <div className="max-w-[1440px] mx-auto flex items-center justify-between">
+        {/* Logo y botón colapsar barra lateral */}
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            title={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+            className="hidden md:flex p-1.5 rounded-xl text-text-muted hover:text-brand-300 hover:bg-brand-800/60 border border-brand-300/10 transition-colors cursor-pointer"
+            aria-label="Alternar barra lateral"
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen className="w-5 h-5 text-brand-300" />
+            ) : (
+              <PanelLeftClose className="w-5 h-5 text-brand-300" />
+            )}
+          </button>
+
           <div className="flex items-center gap-2">
             <span className="font-extrabold tracking-wider text-xl sm:text-2xl bg-gradient-to-r from-brand-100 via-brand-500 to-brand-300 bg-clip-text text-transparent select-none">
               GASTITO
