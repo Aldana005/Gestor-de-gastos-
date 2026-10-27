@@ -210,7 +210,15 @@ public class TransactionStore : ITransactionStore
 
         foreach (var fixedTx in fixedTransactions)
         {
+            var earliestHistorial = fixedTx.HistorialMontos?.Count > 0
+                ? fixedTx.HistorialMontos.Min(h => h.VigenteDesde)
+                : (DateTime?)null;
+
             var fInicio = fixedTx.FechaInicio ?? fixedTx.Fecha;
+            if (earliestHistorial.HasValue && earliestHistorial.Value < fInicio)
+            {
+                fInicio = earliestHistorial.Value;
+            }
             var fFin = fixedTx.FechaFin;
 
             // Rango efectivo de meses a evaluar
@@ -234,21 +242,21 @@ public class TransactionStore : ITransactionStore
 
             while (monthCursor <= endMonth)
             {
-                var originalDay = fInicio.Day;
+                var originalDay = fixedTx.Fecha.Day;
                 var daysInMonth = DateTime.DaysInMonth(monthCursor.Year, monthCursor.Month);
                 var day = Math.Min(originalDay, daysInMonth);
                 var occurrenceDate = new DateTime(monthCursor.Year, monthCursor.Month, day, 0, 0, 0, DateTimeKind.Utc);
 
                 var isWithinRange = (!desdeUtc.HasValue || occurrenceDate >= desdeUtc.Value) &&
                                     (!hastaUtc.HasValue || occurrenceDate <= hastaUtc.Value) &&
-                                    occurrenceDate >= fInicio &&
+                                    monthCursor >= new DateTime(fInicio.Year, fInicio.Month, 1, 0, 0, 0, DateTimeKind.Utc) &&
                                     (!fFin.HasValue || occurrenceDate <= fFin.Value);
 
                 if (isWithinRange)
                 {
                     // Buscar monto vigente para este mes
                     var monthStart = new DateTime(monthCursor.Year, monthCursor.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-                    var effectiveMonto = fixedTx.HistorialMontos
+                    var effectiveMonto = (fixedTx.HistorialMontos ?? Enumerable.Empty<HistorialMonto>())
                         .Where(h => h.VigenteDesde <= monthStart)
                         .OrderByDescending(h => h.VigenteDesde)
                         .ThenByDescending(h => h.Id)
@@ -277,7 +285,7 @@ public class TransactionStore : ITransactionStore
                         FechaPrimeraCuota = fixedTx.FechaPrimeraCuota,
                         FechaPrimeraCuotaPendiente = fixedTx.FechaPrimeraCuotaPendiente,
                         CreatedAtUtc = fixedTx.CreatedAtUtc,
-                        HistorialMontos = fixedTx.HistorialMontos
+                        HistorialMontos = fixedTx.HistorialMontos ?? new List<HistorialMonto>()
                     });
                 }
 

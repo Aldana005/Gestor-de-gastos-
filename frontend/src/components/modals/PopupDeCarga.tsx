@@ -52,6 +52,7 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
   const [notas, setNotas] = useState<string>('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [fecha, setFecha] = useState<string>(getTodayCalendarString());
+  const [fechaInicio, setFechaInicio] = useState<string>(getTodayCalendarString());
   const [fechaFin, setFechaFin] = useState<string>('');
 
   // Gasto States
@@ -94,6 +95,11 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
       setNotas(editingTransaction.notas || '');
       setCategoryId(editingTransaction.categoryId);
       setFecha(toCalendarDateString(editingTransaction.fecha));
+      setFechaInicio(
+        editingTransaction.fechaInicio
+          ? toCalendarDateString(editingTransaction.fechaInicio)
+          : toCalendarDateString(editingTransaction.fecha)
+      );
       setFechaFin(editingTransaction.fechaFin ? toCalendarDateString(editingTransaction.fechaFin) : '');
       setMedioPago(editingTransaction.medioPago || MedioPago.Tarjeta);
       setTarjetaId(editingTransaction.tarjetaId || '');
@@ -115,6 +121,7 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
       setNotas('');
       setCategoryId('');
       setFecha(getTodayCalendarString());
+      setFechaInicio(getTodayCalendarString());
       setFechaFin('');
       setMedioPago(MedioPago.Tarjeta);
       setTarjetaId(tarjetas.length > 0 ? tarjetas[0].id : '');
@@ -225,7 +232,9 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
             categoryId: Number(categoryId),
             medioPago: tipo === TipoMovimiento.Gasto ? medioPago : null,
             tarjetaId: tipo === TipoMovimiento.Gasto && medioPago === MedioPago.Tarjeta ? Number(tarjetaId) : null,
-            fechaInicio: frecuencia === Frecuencia.Fijo ? fecha : null,
+            fechaInicio: frecuencia === Frecuencia.Fijo
+              ? (editingTransaction?.fechaInicio ? toCalendarDateString(editingTransaction.fechaInicio) : fechaInicio)
+              : null,
             fechaFin: frecuencia === Frecuencia.Fijo && fechaFin ? fechaFin : null,
             aplicarDesde: showAplicarDesdeSelector ? aplicarDesde : null,
             montoTotal: tieneCuotas ? parseFloat(montoTotal) : null,
@@ -245,7 +254,7 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
           categoryId: Number(categoryId),
           medioPago: tipo === TipoMovimiento.Gasto ? medioPago : null,
           tarjetaId: tipo === TipoMovimiento.Gasto && medioPago === MedioPago.Tarjeta ? Number(tarjetaId) : null,
-          fechaInicio: frecuencia === Frecuencia.Fijo ? fecha : null,
+          fechaInicio: frecuencia === Frecuencia.Fijo ? (fechaInicio || fecha) : null,
           fechaFin: frecuencia === Frecuencia.Fijo && fechaFin ? fechaFin : null,
           montoTotal: tieneCuotas ? parseFloat(montoTotal) : null,
           cantidadCuotas: tieneCuotas ? parseInt(cantidadCuotas, 10) : null,

@@ -392,4 +392,105 @@ public class FijosTests : IDisposable
         Assert.NotNull(output.HistorialMontos);
         Assert.True(output.HistorialMontos.Count >= 2);
     }
+
+    [Fact]
+    public async Task UpdateAsync_Fijo_WhenModifyingMontoAndFecha_PreservesPreviousMonthsInDashboardAndReports()
+    {
+        // Arrange: Simular que en Marzo 2026 se crea Alquiler a $400.000 con cobro el día 5
+        DateTimeUtils.SetClock(() => new DateTime(2026, 3, 5, 0, 0, 0, DateTimeKind.Utc));
+
+        using var context = CreateInMemoryDbContext();
+        var categoryStore = new CategoryStore(context);
+        var tarjetaStore = new TarjetaStore(context);
+        var transactionStore = new TransactionStore(context);
+        var manager = new TransactionManager(transactionStore, categoryStore, tarjetaStore);
+
+        var trans = await manager.CreateAsync(new Transaction
+        {
+            Tipo = TipoMovimiento.Gasto,
+            Frecuencia = Frecuencia.Fijo,
+            Monto = 400000m,
+            Fecha = new DateTime(2026, 3, 5),
+            FechaInicio = new DateTime(2026, 3, 5),
+            Descripcion = "Alquiler departamento",
+            CategoryId = 2,
+            MedioPago = MedioPago.Transferencia
+        });
+
+        // Act: En Octubre 2026, el usuario edita el alquiler:
+        // Aumenta a $450.000, cambia la fecha al día 10 (2026-10-10),
+        // y el frontend envía Fecha = 2026-10-10 y FechaInicio = 2026-10-10
+        DateTimeUtils.SetClock(() => new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc));
+
+        var updateData = new Transaction
+        {
+            Tipo = TipoMovimiento.Gasto,
+            Frecuencia = Frecuencia.Fijo,
+            Monto = 450000m,
+            Fecha = new DateTime(2026, 10, 10),
+            FechaInicio = new DateTime(2026, 10, 10), // Envío de fecha del modal
+            Descripcion = "Alquiler departamento",
+            CategoryId = 2,
+            MedioPago = MedioPago.Transferencia
+        };
+
+        await manager.UpdateAsync(trans.Id, updateData, AplicarDesde.MesActual);
+
+        // Assert 1: En Marzo 2026 (mes anterior), el alquiler NO debe haber desaparecido
+        var (itemsMarzo, totalMarzo) = await manager.GetPagedAsync(
+            desde: new DateTime(2026, 3, 1),
+            hasta: new DateTime(2026, 3, 31),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 10);
+
+        Assert.Equal(1, totalMarzo);
+        Assert.Single(itemsMarzo);
+        Assert.Equal(400000m, itemsMarzo[0].Monto);
+
+        // Assert 2: En Abril 2026 (otro mes anterior), debe seguir figurando con $400.000
+        var (itemsAbril, totalAbril) = await manager.GetPagedAsync(
+            desde: new DateTime(2026, 4, 1),
+            hasta: new DateTime(2026, 4, 30),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 10);
+
+        Assert.Equal(1, totalAbril);
+        Assert.Single(itemsAbril);
+        Assert.Equal(400000m, itemsAbril[0].Monto);
+
+        // Assert 3: En Octubre 2026 (mes actual), debe figurar con el nuevo monto $450.000
+        var (itemsOctubre, totalOctubre) = await manager.GetPagedAsync(
+            desde: new DateTime(2026, 10, 1),
+            hasta: new DateTime(2026, 10, 31),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 10);
+
+        Assert.Equal(1, totalOctubre);
+        Assert.Single(itemsOctubre);
+        Assert.Equal(450000m, itemsOctubre[0].Monto);
+
+        // Assert 4: FinancialCalculationService para Marzo debe contabilizar los $400.000
+        var allGastos = await transactionStore.GetRawAsync(TipoMovimiento.Gasto);
+        var (totalGastosMarzo, _, _) = Gastito.BusinessLogic.Services.FinancialCalculationService.CalculateGastos(
+            allGastos,
+            new DateTime(2026, 3, 1),
+            new DateTime(2026, 3, 31));
+
+        Assert.Equal(400000m, totalGastosMarzo);
+
+        // Assert 5: FinancialCalculationService para Octubre debe contabilizar los $450.000
+        var (totalGastosOctubre, _, _) = Gastito.BusinessLogic.Services.FinancialCalculationService.CalculateGastos(
+            allGastos,
+            new DateTime(2026, 10, 1),
+            new DateTime(2026, 10, 31));
+
+        Assert.Equal(450000m, totalGastosOctubre);
+    }
 }
+

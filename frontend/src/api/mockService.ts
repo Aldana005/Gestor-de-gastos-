@@ -334,7 +334,18 @@ class MockStorage {
     tx.categoryNombre = cat ? cat.nombre : tx.categoryNombre;
     tx.medioPago = input.medioPago || null;
     tx.tarjetaId = input.tarjetaId || null;
-    tx.tarjetaNombre = tarjeta ? tarjeta.nombre : null;
+    if (tx.frecuencia === Frecuencia.Fijo) {
+      if (tx.fechaInicio) {
+        if (input.fechaInicio && input.fechaInicio < tx.fechaInicio) {
+          tx.fechaInicio = input.fechaInicio;
+        }
+      } else {
+        tx.fechaInicio = input.fechaInicio || tx.fecha;
+      }
+    } else {
+      tx.fechaInicio = input.fechaInicio || null;
+    }
+
     tx.fechaFin = input.fechaFin || null;
 
     this.persist();
@@ -720,21 +731,62 @@ class MockStorage {
     hasta?: string
   ): TransactionOutput[] {
     const expanded: TransactionOutput[] = [];
-    const targetMonths = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01'];
+
+    // Calcular rango de meses dinámicamente según la consulta
+    const startYm = desde ? desde.slice(0, 7) : '2026-01';
+    const endYm = hasta ? hasta.slice(0, 7) : '2027-12';
+
+    const [startYear, startMonth] = startYm.split('-').map(Number);
+    const [endYear, endMonth] = endYm.split('-').map(Number);
+
+    const targetMonths: string[] = [];
+    let curYear = startYear;
+    let curMonth = startMonth;
+    while (curYear < endYear || (curYear === endYear && curMonth <= endMonth)) {
+      targetMonths.push(`${curYear}-${String(curMonth).padStart(2, '0')}`);
+      curMonth++;
+      if (curMonth > 12) {
+        curMonth = 1;
+        curYear++;
+      }
+    }
 
     for (const t of list) {
       // 1. Movimientos Fijos recurrentes
       if (t.frecuencia === Frecuencia.Fijo) {
+        const fInicio = t.fechaInicio ? t.fechaInicio.slice(0, 7) : t.fecha.slice(0, 7);
+        const fFin = t.fechaFin ? t.fechaFin.slice(0, 7) : null;
         const origDay = t.fecha.slice(8, 10) || '01';
+
         for (const ym of targetMonths) {
-          const itemDate = `${ym}-${origDay}`;
+          if (ym < fInicio) continue;
+          if (fFin && ym > fFin) continue;
+
+          const [y, m] = ym.split('-').map(Number);
+          const maxDay = new Date(y, m, 0).getDate();
+          const dayNum = Math.min(parseInt(origDay, 10), maxDay);
+          const itemDate = `${ym}-${String(dayNum).padStart(2, '0')}`;
+
           if (desde && itemDate < desde.slice(0, 10)) continue;
           if (hasta && itemDate > hasta.slice(0, 10)) continue;
 
+          // Buscar monto vigente para este mes en su historial
+          let effectiveMonto = t.monto;
+          if (t.historialMontos && t.historialMontos.length > 0) {
+            const sorted = [...t.historialMontos].sort((a, b) =>
+              (a.fechaInicioUtc || '').localeCompare(b.fechaInicioUtc || '')
+            );
+            const matching = sorted.filter((h) => (h.fechaInicioUtc || '').slice(0, 7) <= ym);
+            if (matching.length > 0) {
+              effectiveMonto = matching[matching.length - 1].monto;
+            }
+          }
+
           expanded.push({
             ...t,
-            id: t.id * 1000 + parseInt(ym.replace('-', ''), 10),
+            id: -(t.id * 1000 + parseInt(ym.replace('-', ''), 10)),
             fecha: itemDate,
+            monto: effectiveMonto,
           });
         }
         continue;

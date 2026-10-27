@@ -55,7 +55,15 @@ public static class FinancialCalculationService
 
         foreach (var fijo in fijos)
         {
+            var earliestHistorial = fijo.HistorialMontos?.Count > 0
+                ? fijo.HistorialMontos.Min(h => h.VigenteDesde)
+                : (DateTime?)null;
+
             var fInicio = fijo.FechaInicio ?? fijo.Fecha;
+            if (earliestHistorial.HasValue && earliestHistorial.Value < fInicio)
+            {
+                fInicio = earliestHistorial.Value;
+            }
             var fFin = fijo.FechaFin;
 
             foreach (var (monthStart, monthEnd) in months)
@@ -63,7 +71,7 @@ public static class FinancialCalculationService
                 var isActive = fInicio <= monthEnd && (!fFin.HasValue || fFin.Value >= monthStart);
                 if (isActive)
                 {
-                    var vigente = fijo.HistorialMontos
+                    var vigente = (fijo.HistorialMontos ?? Enumerable.Empty<HistorialMonto>())
                         .Where(h => h.VigenteDesde <= monthStart)
                         .OrderByDescending(h => h.VigenteDesde)
                         .FirstOrDefault();
@@ -125,7 +133,15 @@ public static class FinancialCalculationService
 
         foreach (var fijo in fijos)
         {
+            var earliestHistorial = fijo.HistorialMontos?.Count > 0
+                ? fijo.HistorialMontos.Min(h => h.VigenteDesde)
+                : (DateTime?)null;
+
             var fInicio = fijo.FechaInicio ?? fijo.Fecha;
+            if (earliestHistorial.HasValue && earliestHistorial.Value < fInicio)
+            {
+                fInicio = earliestHistorial.Value;
+            }
             var fFin = fijo.FechaFin;
 
             foreach (var (monthStart, monthEnd) in months)
@@ -133,7 +149,7 @@ public static class FinancialCalculationService
                 var isActive = fInicio <= monthEnd && (!fFin.HasValue || fFin.Value >= monthStart);
                 if (isActive)
                 {
-                    var vigente = fijo.HistorialMontos
+                    var vigente = (fijo.HistorialMontos ?? Enumerable.Empty<HistorialMonto>())
                         .Where(h => h.VigenteDesde <= monthStart)
                         .OrderByDescending(h => h.VigenteDesde)
                         .FirstOrDefault();

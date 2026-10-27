@@ -162,8 +162,40 @@ public class TransactionManager : ITransactionManager
         existing.TarjetaId = updatedData.TarjetaId;
 
         // Fijos y cuotas
-        existing.FechaInicio = updatedData.FechaInicio;
-        existing.FechaFin = updatedData.FechaFin;
+        if (existing.Frecuencia == Frecuencia.Fijo)
+        {
+            // Para movimientos fijos: preservar la fecha de inicio histórica original
+            // para no borrar las ocurrencias de meses anteriores en dashboards y reportes.
+            if (existing.FechaInicio.HasValue)
+            {
+                if (updatedData.FechaInicio.HasValue && updatedData.FechaInicio.Value < existing.FechaInicio.Value)
+                {
+                    existing.FechaInicio = updatedData.FechaInicio.Value;
+                }
+            }
+            else
+            {
+                existing.FechaInicio = updatedData.FechaInicio ?? existing.Fecha;
+            }
+
+            // Asegurar que FechaInicio nunca sea posterior al registro más antiguo del historial
+            if (existing.HistorialMontos.Count > 0)
+            {
+                var minHistorial = existing.HistorialMontos.Min(h => h.VigenteDesde);
+                if (!existing.FechaInicio.HasValue || minHistorial < existing.FechaInicio.Value)
+                {
+                    existing.FechaInicio = minHistorial;
+                }
+            }
+
+            existing.FechaFin = updatedData.FechaFin;
+        }
+        else
+        {
+            existing.FechaInicio = updatedData.FechaInicio;
+            existing.FechaFin = updatedData.FechaFin;
+        }
+
         if (updatedData.MontoTotal.HasValue) existing.MontoTotal = updatedData.MontoTotal;
         if (updatedData.CantidadCuotas.HasValue) existing.CantidadCuotas = updatedData.CantidadCuotas;
         if (updatedData.FechaPrimeraCuota.HasValue)
