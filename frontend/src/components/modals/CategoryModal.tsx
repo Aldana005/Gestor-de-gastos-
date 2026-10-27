@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Tag } from 'lucide-react';
 import { TipoMovimiento } from '../../api/types';
 import { useMovimientoMutations } from '../../hooks/useMutations';
@@ -7,7 +7,7 @@ interface CategoryModalProps {
   isOpen: boolean;
   defaultTipo: TipoMovimiento;
   onClose: () => void;
-  onSuccess: (newCatId: number) => void;
+  onSuccess: (newCatId: number, tipo?: TipoMovimiento) => void;
 }
 
 export const CategoryModal: React.FC<CategoryModalProps> = ({
@@ -21,6 +21,14 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const { createCategoria } = useMovimientoMutations();
+
+  useEffect(() => {
+    if (isOpen) {
+      setNombre('');
+      setTipo(defaultTipo);
+      setError(null);
+    }
+  }, [isOpen, defaultTipo]);
 
   if (!isOpen) return null;
 
@@ -39,7 +47,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         tipo,
       });
       setNombre('');
-      onSuccess(created.id);
+      onSuccess(created.id, created.tipo);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Error al crear la categoría.');

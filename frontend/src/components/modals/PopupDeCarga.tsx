@@ -123,8 +123,9 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
       setFecha(getTodayCalendarString());
       setFechaInicio(getTodayCalendarString());
       setFechaFin('');
-      setMedioPago(MedioPago.Tarjeta);
-      setTarjetaId(tarjetas.length > 0 ? tarjetas[0].id : '');
+      const hasCards = tarjetas.length > 0;
+      setMedioPago(hasCards ? MedioPago.Tarjeta : MedioPago.Efectivo);
+      setTarjetaId(hasCards ? tarjetas[0].id : '');
       setTieneCuotas(false);
       setMontoTotal('');
       setCantidadCuotas('3');
@@ -268,7 +269,11 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
       if (err.problemDetails?.errors) {
         const serverErrors: Record<string, string> = {};
         for (const [k, v] of Object.entries(err.problemDetails.errors)) {
-          serverErrors[k.toLowerCase()] = Array.isArray(v) ? (v as string[]).join(' ') : String(v);
+          const msg = Array.isArray(v) ? (v as string[]).join(' ') : String(v);
+          const camelKey = k.charAt(0).toLowerCase() + k.slice(1);
+          serverErrors[camelKey] = msg;
+          serverErrors[k.toLowerCase()] = msg;
+          serverErrors[k] = msg;
         }
         setFieldErrors(serverErrors);
       }
@@ -416,23 +421,45 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
                         <span>Crear nueva</span>
                       </button>
                     </div>
-                    <select
-                      id="tarjeta-select"
-                      value={tarjetaId}
-                      onChange={(e) => setTarjetaId(Number(e.target.value))}
-                      className="glass-input text-xs"
-                    >
-                      <option value="" disabled className="bg-brand-900">
-                        -- Elegir tarjeta --
-                      </option>
-                      {tarjetas.map((t) => (
-                        <option key={t.id} value={t.id} className="bg-brand-900">
-                          {t.nombre} ({t.tipoTarjeta === TipoTarjeta.Credito ? 'Crédito' : 'Débito'})
-                        </option>
-                      ))}
-                    </select>
-                    {fieldErrors.tarjetaId && (
-                      <p className="text-xs text-expense">{fieldErrors.tarjetaId}</p>
+                    {tarjetas.length === 0 ? (
+                      <div className="p-3 rounded-xl bg-warning-bg/25 border border-warning/40 space-y-2">
+                        <div className="flex items-center gap-2 text-warning text-xs font-bold">
+                          <AlertCircle className="w-4 h-4 shrink-0" />
+                          <span>No tenés tarjetas registradas</span>
+                        </div>
+                        <p className="text-xs text-text-secondary">
+                          Podés crear una tarjeta ahora mismo o pagar en <strong>Efectivo</strong> o <strong>Transferencia</strong>.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setIsTarjetaModalOpen(true)}
+                          className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          <span>Crear tarjeta ahora</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          id="tarjeta-select"
+                          value={tarjetaId}
+                          onChange={(e) => setTarjetaId(Number(e.target.value))}
+                          className="glass-input text-xs"
+                        >
+                          <option value="" disabled className="bg-brand-900">
+                            -- Elegir tarjeta --
+                          </option>
+                          {tarjetas.map((t) => (
+                            <option key={t.id} value={t.id} className="bg-brand-900">
+                              {t.nombre} ({t.tipoTarjeta === TipoTarjeta.Credito ? 'Crédito' : 'Débito'})
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.tarjetaId && (
+                          <p className="text-xs text-expense">{fieldErrors.tarjetaId}</p>
+                        )}
+                      </>
                     )}
 
                     {/* Si la tarjeta es de Crédito: ¿Tiene cuotas? Sí / No */}
@@ -822,13 +849,21 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
         isOpen={isCategoryModalOpen}
         defaultTipo={tipo}
         onClose={() => setIsCategoryModalOpen(false)}
-        onSuccess={(newId) => setCategoryId(newId)}
+        onSuccess={(newId, newTipo) => {
+          if (newTipo && newTipo !== tipo) {
+            setTipo(newTipo);
+          }
+          setCategoryId(newId);
+        }}
       />
 
       <TarjetaModal
         isOpen={isTarjetaModalOpen}
         onClose={() => setIsTarjetaModalOpen(false)}
-        onSuccess={(newId) => setTarjetaId(newId)}
+        onSuccess={(newId) => {
+          setMedioPago(MedioPago.Tarjeta);
+          setTarjetaId(newId);
+        }}
       />
     </>
   );

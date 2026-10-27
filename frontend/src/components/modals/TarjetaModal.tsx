@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, CreditCard } from 'lucide-react';
 import { TipoTarjeta } from '../../api/types';
 import { useMovimientoMutations } from '../../hooks/useMutations';
@@ -19,6 +19,14 @@ export const TarjetaModal: React.FC<TarjetaModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const { createTarjeta } = useMovimientoMutations();
+
+  useEffect(() => {
+    if (isOpen) {
+      setNombre('');
+      setTipoTarjeta(TipoTarjeta.Credito);
+      setError(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

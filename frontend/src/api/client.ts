@@ -83,10 +83,15 @@ export async function apiClient<T>(
 
   if (!response.ok) {
     const problem: ProblemDetails = data || {};
-    const message =
-      problem.detail ||
-      problem.title ||
-      (problem.errors ? Object.values(problem.errors).flat().join('. ') : `Error HTTP ${response.status}`);
+    let message = problem.detail;
+    if (!message && problem.errors) {
+      message = Object.entries(problem.errors)
+        .map(([_, errs]) => (Array.isArray(errs) ? errs.join(', ') : String(errs)))
+        .join('. ');
+    }
+    if (!message) {
+      message = problem.title || `Error HTTP ${response.status}`;
+    }
     throw new ApiError(response.status, message, problem);
   }
 
