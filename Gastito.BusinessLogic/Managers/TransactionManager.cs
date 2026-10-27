@@ -380,34 +380,23 @@ public class TransactionManager : ITransactionManager
         // Actualizar cuotas pagadas
         existing.CuotasPagadas = cuotasPagadasActuales + cantidad;
 
-        // Corrimiento de calendario (Sección 3.6):
-        // "Las cuotas restantes se corren: la próxima cuota pendiente pasa al mes siguiente al del pago y las demás la siguen mes a mes."
-        // "Caso borde: si lo adelantado no supera las cuotas que ya correspondían hasta el mes del pago, el calendario no cambia."
+        // Corrimiento de calendario con compresión consecutiva (Opción A):
+        // Al adelantar cuotas, la próxima cuota pendiente pasa al mes inmediatamente posterior al del pago.
+        // Las cuotas restantes la siguen mes a mes, liberando los meses finales (cola del calendario).
         var fechaPago = DateTimeUtils.GetArgentinaToday();
         var primeraCuota = existing.FechaPrimeraCuota ?? existing.Fecha;
-
-        // Cuántas cuotas correspondían hasta el mes actual del pago:
-        var mesesHastaPago = ((fechaPago.Year - primeraCuota.Year) * 12) + (fechaPago.Month - primeraCuota.Month);
-        var cuotasQueCorrespondian = Math.Min(existing.CantidadCuotas.Value, Math.Max(0, mesesHastaPago + 1));
 
         if (existing.CuotasPagadas.Value >= existing.CantidadCuotas.Value)
         {
             // Ya se pagaron todas las cuotas
             existing.FechaPrimeraCuotaPendiente = null;
         }
-        else if (existing.CuotasPagadas.Value > cuotasQueCorrespondian)
+        else
         {
-            // Superó las cuotas que correspondían: la próxima cuota pendiente pasa al mes siguiente al del pago
             var proximoMes = new DateTime(fechaPago.Year, fechaPago.Month, 1).AddMonths(1);
             var maxDays = DateTime.DaysInMonth(proximoMes.Year, proximoMes.Month);
             var day = Math.Min(primeraCuota.Day, maxDays);
             existing.FechaPrimeraCuotaPendiente = new DateTime(proximoMes.Year, proximoMes.Month, day, 0, 0, 0, DateTimeKind.Utc);
-        }
-        else
-        {
-            // Caso borde: lo adelantado no supera lo que correspondía hasta este mes: el calendario no cambia
-            var proximaPendienteIndex = existing.CuotasPagadas.Value + 1;
-            existing.FechaPrimeraCuotaPendiente = CuotaCalculator.CalcularFechaCuota(primeraCuota, proximaPendienteIndex);
         }
 
         await _transactionStore.UpdateAsync(existing, ct);
@@ -457,9 +446,10 @@ public class TransactionManager : ITransactionManager
             .ThenByDescending(t => t.Id)
             .ToList();
 
-        // 2. Compras en cuotas
+        // 2. Compras en cuotas que aún tienen saldo pendiente
         var comprasEnCuotas = eventuales
-            .Where(t => t.CantidadCuotas.HasValue && t.CantidadCuotas.Value > 1 && t.MontoTotal.HasValue)
+            .Where(t => t.CantidadCuotas.HasValue && t.CantidadCuotas.Value > 1 && t.MontoTotal.HasValue &&
+                        (t.CuotasPagadas ?? 0) < t.CantidadCuotas.Value)
             .ToList();
 
         var cuotasEnPeriodo = new List<(Transaction Tx, bool TerminaEnPeriodo, decimal ValorCuota)>();
@@ -474,9 +464,9 @@ public class TransactionManager : ITransactionManager
             if (montoMin.HasValue && compra.MontoTotal!.Value < montoMin.Value && valorCuota < montoMin.Value) continue;
             if (montoMax.HasValue && compra.MontoTotal!.Value > montoMax.Value && valorCuota > montoMax.Value) continue;
 
-            // Verificar si alguna cuota cae dentro del rango [desdeUtc, hastaUtc]
+            // Verificar si alguna cuota pendiente (no saldada) cae dentro del rango [desdeUtc, hastaUtc]
             bool tieneCuotaEnRango = false;
-            for (int c = 1; c <= cantidad; c++)
+            for (int c = pagadas + 1; c <= cantidad; c++)
             {
                 var fechaCuota = CuotaCalculator.CalcularFechaDeCuotaConCorrimiento(primeraCuota, compra.FechaPrimeraCuotaPendiente, pagadas, c);
                 if (fechaCuota >= desdeUtc && fechaCuota <= hastaUtc)

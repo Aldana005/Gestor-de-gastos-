@@ -385,6 +385,20 @@ class MockStorage {
     tx.cuotasRestantes = (tx.cantidadCuotas || 0) - tx.cuotasPagadas;
     tx.montoPendiente = Math.max(0, (tx.montoTotal || 0) - tx.cuotasPagadas * tx.valorCuota);
 
+    if (tx.cuotasPagadas >= (tx.cantidadCuotas || 0)) {
+      tx.fechaPrimeraCuotaPendiente = undefined;
+    } else {
+      const now = new Date();
+      const proximoMes = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const origDateStr = tx.fechaPrimeraCuota || tx.fecha;
+      const origDay = parseInt(origDateStr.slice(8, 10), 10) || 1;
+      const maxDays = new Date(proximoMes.getFullYear(), proximoMes.getMonth() + 1, 0).getDate();
+      const day = Math.min(origDay, maxDays);
+      const dayStr = String(day).padStart(2, '0');
+      const monthStr = String(proximoMes.getMonth() + 1).padStart(2, '0');
+      tx.fechaPrimeraCuotaPendiente = `${proximoMes.getFullYear()}-${monthStr}-${dayStr}`;
+    }
+
     this.persist();
     return pago;
   }
@@ -670,30 +684,134 @@ class MockStorage {
     };
   }
 
-  // --- Helpers ---
+  // --- Helpers de Cuotas y Expansión ---
+  private calcularFechaCuota(baseDateStr: string, numeroCuota: number): string {
+    const parts = baseDateStr.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+
+    const targetDate = new Date(year, month + (numeroCuota - 1), 1);
+    const maxDays = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
+    const targetDay = Math.min(day, maxDays);
+
+    const yStr = targetDate.getFullYear();
+    const mStr = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const dStr = String(targetDay).padStart(2, '0');
+    return `${yStr}-${mStr}-${dStr}`;
+  }
+
+  private calcularFechaCuotaConCorrimiento(
+    fechaPrimeraCuota: string,
+    fechaPrimeraCuotaPendiente: string | null | undefined,
+    cuotasPagadas: number,
+    numeroCuota: number
+  ): string {
+    if (numeroCuota <= cuotasPagadas || !fechaPrimeraCuotaPendiente) {
+      return this.calcularFechaCuota(fechaPrimeraCuota, numeroCuota);
+    }
+    const offset = numeroCuota - (cuotasPagadas + 1);
+    return this.calcularFechaCuota(fechaPrimeraCuotaPendiente, offset + 1);
+  }
+
   private expandFixedTransactions(
     list: TransactionOutput[],
     desde?: string,
     hasta?: string
   ): TransactionOutput[] {
-    const regular = list.filter((t) => t.frecuencia !== Frecuencia.Fijo);
-    const fijos = list.filter((t) => t.frecuencia === Frecuencia.Fijo);
+    const expanded: TransactionOutput[] = [];
+    const targetMonths = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01'];
 
-    const expanded: TransactionOutput[] = [...regular];
-    const targetMonths = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'];
+    for (const t of list) {
+      // 1. Movimientos Fijos recurrentes
+      if (t.frecuencia === Frecuencia.Fijo) {
+        const origDay = t.fecha.slice(8, 10) || '01';
+        for (const ym of targetMonths) {
+          const itemDate = `${ym}-${origDay}`;
+          if (desde && itemDate < desde.slice(0, 10)) continue;
+          if (hasta && itemDate > hasta.slice(0, 10)) continue;
 
-    for (const f of fijos) {
-      const origDay = f.fecha.slice(8, 10) || '01';
-      for (const ym of targetMonths) {
-        const itemDate = `${ym}-${origDay}`;
-        if (desde && itemDate < desde.slice(0, 10)) continue;
-        if (hasta && itemDate > hasta.slice(0, 10)) continue;
+          expanded.push({
+            ...t,
+            id: t.id * 1000 + parseInt(ym.replace('-', ''), 10),
+            fecha: itemDate,
+          });
+        }
+        continue;
+      }
 
-        expanded.push({
-          ...f,
-          id: f.id * 1000 + parseInt(ym.replace('-', ''), 10),
-          fecha: itemDate,
-        });
+      // 2. Compras en cuotas
+      if (t.cantidadCuotas && t.cantidadCuotas >= 2 && t.montoTotal) {
+        const primeraCuota = t.fechaPrimeraCuota || t.fecha;
+        const cantidad = t.cantidadCuotas;
+        const pagadas = t.cuotasPagadas || 0;
+        const valorCuota = t.valorCuota || Math.round((t.montoTotal / cantidad) * 100) / 100;
+
+        // A. Compra informativa para Camino 1 (primera cuota en mes posterior)
+        const isCamino1 = Boolean(
+          t.fechaPrimeraCuota && t.fechaPrimeraCuota.slice(0, 7) > t.fecha.slice(0, 7)
+        );
+        if (isCamino1) {
+          const compraDate = t.fecha.slice(0, 10);
+          const inRange = (!desde || compraDate >= desde.slice(0, 10)) &&
+                          (!hasta || compraDate <= hasta.slice(0, 10));
+          if (inRange) {
+            expanded.push({
+              ...t,
+              monto: 0,
+              descripcion: `${t.descripcion} (${cantidad} cuotas)`,
+            });
+          }
+        }
+
+        // B. Movimientos individuales por cada cuota adelantada/pagada en su fecha de pago
+        const pagos = this.pagos[t.id] || [];
+        for (const p of pagos) {
+          const pagoDate = p.fechaPagoUtc.slice(0, 10);
+          const inRange = (!desde || pagoDate >= desde.slice(0, 10)) &&
+                          (!hasta || pagoDate <= hasta.slice(0, 10));
+          if (inRange) {
+            for (let c = p.cuotaDesde; c <= p.cuotaHasta; c++) {
+              expanded.push({
+                ...t,
+                id: -(p.id * 1000 + c),
+                fecha: pagoDate,
+                monto: valorCuota,
+                descripcion: `Cuota ${c}/${cantidad} - ${t.descripcion} (Adelanto)`,
+              });
+            }
+          }
+        }
+
+        // C. Cuotas pendientes no saldadas (con corrimiento consecutivo hacia adelante)
+        for (let c = pagadas + 1; c <= cantidad; c++) {
+          const fc = this.calcularFechaCuotaConCorrimiento(
+            primeraCuota,
+            t.fechaPrimeraCuotaPendiente,
+            pagadas,
+            c
+          );
+          const inRange = (!desde || fc >= desde.slice(0, 10)) &&
+                          (!hasta || fc <= hasta.slice(0, 10));
+          if (inRange) {
+            expanded.push({
+              ...t,
+              id: -(t.id * 10000 + c),
+              fecha: fc,
+              monto: valorCuota,
+              descripcion: `Cuota ${c}/${cantidad} - ${t.descripcion}`,
+            });
+          }
+        }
+        continue;
+      }
+
+      // 3. Movimiento regular eventual
+      const itemDate = t.fecha.slice(0, 10);
+      const inRange = (!desde || itemDate >= desde.slice(0, 10)) &&
+                      (!hasta || itemDate <= hasta.slice(0, 10));
+      if (inRange) {
+        expanded.push({ ...t });
       }
     }
 

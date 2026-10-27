@@ -22,7 +22,12 @@ import { useCategorias, useTarjetas } from '../../hooks/useQueries';
 import { useMovimientoMutations } from '../../hooks/useMutations';
 import { CategoryModal } from './CategoryModal';
 import { TarjetaModal } from './TarjetaModal';
-import { getTodayCalendarString, toCalendarDateString } from '../../utils/formatters';
+import {
+  getTodayCalendarString,
+  toCalendarDateString,
+  getNextMonthFirstDayString,
+  formatMonthYearAR,
+} from '../../utils/formatters';
 
 interface PopupDeCargaProps {
   isOpen: boolean;
@@ -493,7 +498,7 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
                               )}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div>
                                 <label htmlFor="cant-cuotas" className="block text-xs font-medium text-text-secondary mb-1">
                                   Cantidad de cuotas (mín. 2) *
@@ -514,7 +519,7 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
                               </div>
                               <div>
                                 <label htmlFor="primera-cuota" className="block text-xs font-medium text-text-secondary mb-1">
-                                  1ª cuota (calendario) *
+                                  Fecha exacta 1ª cuota *
                                 </label>
                                 <input
                                   id="primera-cuota"
@@ -528,6 +533,42 @@ export const PopupDeCarga: React.FC<PopupDeCargaProps> = ({
                                   <p className="text-xs text-expense mt-1">{fieldErrors.fechaPrimeraCuota}</p>
                                 )}
                               </div>
+                            </div>
+
+                            {/* Selector rápido: Camino 1 vs Camino 2 */}
+                            <div className="space-y-1.5 pt-2 border-t border-brand-300/10">
+                              <label className="block text-xs font-semibold text-text-secondary">
+                                ¿Cuándo empieza a correr la 1ª cuota?
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  disabled={hasPaidInstallments}
+                                  onClick={() => setFechaPrimeraCuota(fecha)}
+                                  className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all ${
+                                    fechaPrimeraCuota.slice(0, 7) <= fecha.slice(0, 7)
+                                      ? 'bg-brand-500/25 border-brand-500 text-brand-100 shadow-sm'
+                                      : 'bg-brand-800/40 border-brand-300/15 text-text-secondary hover:text-text-primary'
+                                  }`}
+                                >
+                                  Empieza este mes
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={hasPaidInstallments}
+                                  onClick={() => setFechaPrimeraCuota(getNextMonthFirstDayString(fecha))}
+                                  className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all ${
+                                    fechaPrimeraCuota.slice(0, 7) > fecha.slice(0, 7)
+                                      ? 'bg-brand-500/25 border-brand-500 text-brand-100 shadow-sm'
+                                      : 'bg-brand-800/40 border-brand-300/15 text-text-secondary hover:text-text-primary'
+                                  }`}
+                                >
+                                  Empieza el mes que viene
+                                </button>
+                              </div>
+                              <p className="text-[11px] text-brand-300 capitalize pt-0.5">
+                                📅 Primera cuota programada: <strong>{formatMonthYearAR(fechaPrimeraCuota)}</strong>
+                              </p>
                             </div>
                           </div>
                         )}

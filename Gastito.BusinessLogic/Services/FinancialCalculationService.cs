@@ -266,9 +266,9 @@ public static class FinancialCalculationService
 
             if (requireInstallmentInPeriod)
             {
-                // Para Reportes: debe tener alguna cuota en el rango
+                // Para Reportes: debe tener alguna cuota pendiente no saldada en el rango
                 bool tieneCuotaEnRango = false;
-                for (int c = 1; c <= cantidad; c++)
+                for (int c = pagadas + 1; c <= cantidad; c++)
                 {
                     var fc = CuotaCalculator.CalcularFechaDeCuotaConCorrimiento(
                         primeraCuota,

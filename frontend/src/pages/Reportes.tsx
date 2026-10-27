@@ -425,11 +425,11 @@ export const Reportes: React.FC = () => {
               />
             ) : (
               <div className="space-y-2.5">
-                {movimientosData.items.map((mov) => {
+                {movimientosData.items.map((mov, idx) => {
                   const isIngreso = mov.tipo === TipoMovimiento.Ingreso;
                   return (
                     <div
-                      key={mov.id}
+                      key={`${mov.id}-${mov.fecha}-${idx}`}
                       className="p-3.5 sm:p-4 rounded-2xl bg-brand-800/40 border border-brand-300/15 hover:border-brand-300/30 transition-all flex items-center justify-between gap-3 group"
                     >
                       <div className="flex items-center gap-3 min-w-0">

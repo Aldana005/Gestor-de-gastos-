@@ -104,7 +104,7 @@ public class PendientesYAdelantarTests : IDisposable
     }
 
     [Fact]
-    public async Task AdelantarCuotas_EdgeCase_WhenNotExceedingCorrespondingMonths_CalendarDoesNotShift()
+    public async Task AdelantarCuotas_ConsecutiveCompression_ShiftsNextPendingToNextMonth()
     {
         // Arrange: Simular Marzo 2026
         DateTimeUtils.SetClock(() => new DateTime(2026, 3, 15, 10, 0, 0, DateTimeKind.Utc));
@@ -122,7 +122,6 @@ public class PendientesYAdelantarTests : IDisposable
         });
 
         // Compra de 6 cuotas iniciada en Enero 2026 (Ene: 1, Feb: 2, Mar: 3)
-        // A Marzo 2026 correspondían 3 cuotas.
         var trans = await manager.CreateAsync(new Transaction
         {
             Tipo = TipoMovimiento.Gasto,
@@ -136,14 +135,170 @@ public class PendientesYAdelantarTests : IDisposable
             TarjetaId = tarjeta.Id
         });
 
-        // En Marzo paga 2 cuotas (1 y 2). Lo pagado (2) <= lo correspondiente a Marzo (3).
+        // En Marzo paga 2 cuotas (1 y 2). Con compresión consecutiva, la cuota 3 pasa a Abril.
         await manager.AdelantarCuotasAsync(trans.Id, 2);
 
-        // Assert: El calendario no se adelanta; la próxima cuota (3) sigue programada para Marzo
+        // Assert: La próxima cuota (3) pasa al mes siguiente al del pago (Abril 2026)
         var updated = await manager.GetByIdAsync(trans.Id);
         Assert.NotNull(updated);
         Assert.Equal(2, updated.CuotasPagadas);
-        Assert.Equal(new DateTime(2026, 3, 5, 0, 0, 0, DateTimeKind.Utc), updated.FechaPrimeraCuotaPendiente);
+        Assert.Equal(new DateTime(2026, 4, 5, 0, 0, 0, DateTimeKind.Utc), updated.FechaPrimeraCuotaPendiente);
+    }
+
+    [Fact]
+    public async Task AdelantarCuotas_Adelanto4De6EnOctubre_Cuota5Noviembre_Cuota6Diciembre_SinCuotasFalsasEnEnero()
+    {
+        // Arrange: Simular Octubre 2026
+        DateTimeUtils.SetClock(() => new DateTime(2026, 10, 26, 10, 0, 0, DateTimeKind.Utc));
+
+        using var context = CreateInMemoryDbContext();
+        var categoryStore = new CategoryStore(context);
+        var tarjetaStore = new TarjetaStore(context);
+        var transactionStore = new TransactionStore(context);
+        var manager = new TransactionManager(transactionStore, categoryStore, tarjetaStore);
+
+        var tarjeta = await tarjetaStore.CreateAsync(new Tarjeta
+        {
+            Nombre = "Visa Galicia",
+            TipoTarjeta = TipoTarjeta.Credito
+        });
+
+        // Compra 6 cuotas de $10.000 cargada el 26/10/2026
+        var trans = await manager.CreateAsync(new Transaction
+        {
+            Tipo = TipoMovimiento.Gasto,
+            Frecuencia = Frecuencia.Eventual,
+            MontoTotal = 60000m,
+            CantidadCuotas = 6,
+            Fecha = new DateTime(2026, 10, 26),
+            FechaPrimeraCuota = new DateTime(2026, 10, 26),
+            Descripcion = "Smart TV",
+            CategoryId = 1,
+            MedioPago = MedioPago.Tarjeta,
+            TarjetaId = tarjeta.Id
+        });
+
+        // Act: En Octubre se adelantan 4 cuotas
+        var pago = await manager.AdelantarCuotasAsync(trans.Id, 4);
+
+        // Assert: Cuotas pagadas = 4, próxima cuota pendiente = Noviembre 2026
+        var updated = await manager.GetByIdAsync(trans.Id);
+        Assert.NotNull(updated);
+        Assert.Equal(4, updated.CuotasPagadas);
+        Assert.Equal(new DateTime(2026, 11, 26, 0, 0, 0, DateTimeKind.Utc), updated.FechaPrimeraCuotaPendiente);
+
+        // Verificar movimientos en Octubre 2026: deben figurar las 4 cuotas adelantadas
+        var (movsOct, countOct) = await transactionStore.GetPagedAsync(
+            desde: new DateTime(2026, 10, 1),
+            hasta: new DateTime(2026, 10, 31),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 50);
+        Assert.Equal(4, countOct);
+        Assert.Equal(40000m, movsOct.Sum(m => m.Monto));
+
+        // Verificar movimientos en Noviembre 2026: debe figurar la Cuota 5
+        var (movsNov, countNov) = await transactionStore.GetPagedAsync(
+            desde: new DateTime(2026, 11, 1),
+            hasta: new DateTime(2026, 11, 30),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 50);
+        Assert.Single(movsNov);
+        Assert.Contains("Cuota 5/6", movsNov[0].Descripcion);
+        Assert.Equal(10000m, movsNov[0].Monto);
+
+        // Verificar movimientos en Diciembre 2026: debe figurar la Cuota 6
+        var (movsDic, countDic) = await transactionStore.GetPagedAsync(
+            desde: new DateTime(2026, 12, 1),
+            hasta: new DateTime(2026, 12, 31),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 50);
+        Assert.Single(movsDic);
+        Assert.Contains("Cuota 6/6", movsDic[0].Descripcion);
+        Assert.Equal(10000m, movsDic[0].Monto);
+
+        // Verificar movimientos en Enero 2027: NO debe figurar ninguna cuota (cero cuotas falsas)
+        var (movsEne, countEne) = await transactionStore.GetPagedAsync(
+            desde: new DateTime(2027, 1, 1),
+            hasta: new DateTime(2027, 1, 31),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 50);
+        Assert.Empty(movsEne);
+
+        // Verificar movimientos en Febrero 2027: NO debe figurar ninguna cuota
+        var (movsFeb, countFeb) = await transactionStore.GetPagedAsync(
+            desde: new DateTime(2027, 2, 1),
+            hasta: new DateTime(2027, 2, 28),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 50);
+        Assert.Empty(movsFeb);
+    }
+
+    [Fact]
+    public async Task Camino1_GastoCargadoEnOctubre_IniciaEnNoviembre_OctubreMontoCero_NoviembreCuota1()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var categoryStore = new CategoryStore(context);
+        var tarjetaStore = new TarjetaStore(context);
+        var transactionStore = new TransactionStore(context);
+        var manager = new TransactionManager(transactionStore, categoryStore, tarjetaStore);
+
+        var tarjeta = await tarjetaStore.CreateAsync(new Tarjeta
+        {
+            Nombre = "Mastercard BBVA",
+            TipoTarjeta = TipoTarjeta.Credito
+        });
+
+        // Camino 1: compra cargada el 26/10/2026 pero 1ª cuota corre desde el 01/11/2026
+        var trans = await manager.CreateAsync(new Transaction
+        {
+            Tipo = TipoMovimiento.Gasto,
+            Frecuencia = Frecuencia.Eventual,
+            MontoTotal = 60000m,
+            CantidadCuotas = 6,
+            Fecha = new DateTime(2026, 10, 26),
+            FechaPrimeraCuota = new DateTime(2026, 11, 1),
+            Descripcion = "Lavarropas",
+            CategoryId = 1,
+            MedioPago = MedioPago.Tarjeta,
+            TarjetaId = tarjeta.Id
+        });
+
+        // Act & Assert 1: En Octubre 2026 figura el registro informativo de la compra con Monto = $0
+        var (movsOct, countOct) = await transactionStore.GetPagedAsync(
+            desde: new DateTime(2026, 10, 1),
+            hasta: new DateTime(2026, 10, 31),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 50);
+
+        Assert.Single(movsOct);
+        Assert.Equal(0m, movsOct[0].Monto);
+        Assert.Contains("6 cuotas", movsOct[0].Descripcion);
+
+        // Act & Assert 2: En Noviembre 2026 figura la Cuota 1/6 con Monto = $10.000
+        var (movsNov, countNov) = await transactionStore.GetPagedAsync(
+            desde: new DateTime(2026, 11, 1),
+            hasta: new DateTime(2026, 11, 30),
+            tipo: null,
+            categoriaIds: null,
+            pagina: 1,
+            tamanoPagina: 50);
+
+        Assert.Single(movsNov);
+        Assert.Equal(10000m, movsNov[0].Monto);
+        Assert.Contains("Cuota 1/6", movsNov[0].Descripcion);
     }
 
     [Fact]

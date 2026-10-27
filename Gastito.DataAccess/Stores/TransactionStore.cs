@@ -33,6 +33,7 @@ public class TransactionStore : ITransactionStore
             .Include(t => t.Category)
             .Include(t => t.Tarjeta)
             .Include(t => t.HistorialMontos)
+            .Include(t => t.PagosCuota)
             .Where(t => t.Frecuencia == Frecuencia.Eventual)
             .AsQueryable();
 
@@ -54,16 +55,97 @@ public class TransactionStore : ITransactionStore
             var tieneCuotas = item.CantidadCuotas.HasValue && item.CantidadCuotas.Value > 1 && item.MontoTotal.HasValue;
             if (tieneCuotas && (desdeUtc.HasValue || hastaUtc.HasValue))
             {
-                // En consultas con rango, proyectar la cuota que cae en el período (Sección 3.5 y 3.7)
                 var primeraCuota = item.FechaPrimeraCuota ?? item.Fecha;
-                for (int c = 1; c <= item.CantidadCuotas!.Value; c++)
+                var cantidad = item.CantidadCuotas!.Value;
+                var pagadas = item.CuotasPagadas ?? 0;
+
+                // A. Registro de compra en su mes de carga para Camino 1 (cuando la 1ª cuota empieza en un mes posterior):
+                // En el mes de compra figura el registro informativo con Monto = 0m, sin inflar los gastos del mes.
+                var esCamino1 = item.FechaPrimeraCuota.HasValue &&
+                                (item.FechaPrimeraCuota.Value.Year > item.Fecha.Year ||
+                                 (item.FechaPrimeraCuota.Value.Year == item.Fecha.Year && item.FechaPrimeraCuota.Value.Month > item.Fecha.Month));
+
+                if (esCamino1)
                 {
-                    var fechaCuota = CuotaCalculator.CalcularFechaDeCuotaConCorrimiento(primeraCuota, item.FechaPrimeraCuotaPendiente, item.CuotasPagadas ?? 0, c);
+                    var compraMatchesRange = (!desdeUtc.HasValue || item.Fecha >= desdeUtc.Value) &&
+                                             (!hastaUtc.HasValue || item.Fecha <= hastaUtc.Value);
+                    if (compraMatchesRange)
+                    {
+                        eventualItems.Add(new Transaction
+                        {
+                            Id = item.Id,
+                            Tipo = item.Tipo,
+                            Frecuencia = item.Frecuencia,
+                            Monto = 0m,
+                            Moneda = item.Moneda,
+                            Fecha = item.Fecha,
+                            Descripcion = $"{item.Descripcion} ({cantidad} cuotas)",
+                            Notas = item.Notas,
+                            CategoryId = item.CategoryId,
+                            Category = item.Category,
+                            MedioPago = item.MedioPago,
+                            TarjetaId = item.TarjetaId,
+                            Tarjeta = item.Tarjeta,
+                            MontoTotal = item.MontoTotal,
+                            CantidadCuotas = item.CantidadCuotas,
+                            CuotasPagadas = item.CuotasPagadas,
+                            FechaPrimeraCuota = item.FechaPrimeraCuota,
+                            FechaPrimeraCuotaPendiente = item.FechaPrimeraCuotaPendiente,
+                            CreatedAtUtc = item.CreatedAtUtc
+                        });
+                    }
+                }
+
+                // B. Movimientos individuales por cada cuota adelantada/pagada en PagoCuota:
+                // Se proyectan con la fecha en que se realizó el pago efectivo.
+                if (item.PagosCuota != null)
+                {
+                    foreach (var pago in item.PagosCuota)
+                    {
+                        var pagoMatches = (!desdeUtc.HasValue || pago.FechaPagoUtc >= desdeUtc.Value) &&
+                                          (!hastaUtc.HasValue || pago.FechaPagoUtc <= hastaUtc.Value);
+                        if (pagoMatches)
+                        {
+                            for (int c = pago.CuotaDesde; c <= pago.CuotaHasta; c++)
+                            {
+                                var montoCuota = CuotaCalculator.CalcularValorCuota(item.MontoTotal!.Value, cantidad, c);
+                                eventualItems.Add(new Transaction
+                                {
+                                    Id = item.Id,
+                                    Tipo = item.Tipo,
+                                    Frecuencia = item.Frecuencia,
+                                    Monto = montoCuota,
+                                    Moneda = item.Moneda,
+                                    Fecha = pago.FechaPagoUtc,
+                                    Descripcion = $"Cuota {c}/{cantidad} - {item.Descripcion} (Adelanto)",
+                                    Notas = item.Notas,
+                                    CategoryId = item.CategoryId,
+                                    Category = item.Category,
+                                    MedioPago = item.MedioPago,
+                                    TarjetaId = item.TarjetaId,
+                                    Tarjeta = item.Tarjeta,
+                                    MontoTotal = item.MontoTotal,
+                                    CantidadCuotas = item.CantidadCuotas,
+                                    CuotasPagadas = item.CuotasPagadas,
+                                    FechaPrimeraCuota = item.FechaPrimeraCuota,
+                                    FechaPrimeraCuotaPendiente = item.FechaPrimeraCuotaPendiente,
+                                    CreatedAtUtc = pago.FechaPagoUtc
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // C. Cuotas programadas pendientes (no saldadas ni adelantadas):
+                // Se proyectan mes a mes a partir de cuotasPagadas + 1 con el corrimiento consecutivo.
+                for (int c = pagadas + 1; c <= cantidad; c++)
+                {
+                    var fechaCuota = CuotaCalculator.CalcularFechaDeCuotaConCorrimiento(primeraCuota, item.FechaPrimeraCuotaPendiente, pagadas, c);
                     var matchesRange = (!desdeUtc.HasValue || fechaCuota >= desdeUtc.Value) &&
                                        (!hastaUtc.HasValue || fechaCuota <= hastaUtc.Value);
                     if (matchesRange)
                     {
-                        var montoCuota = CuotaCalculator.CalcularValorCuota(item.MontoTotal!.Value, item.CantidadCuotas.Value, c);
+                        var montoCuota = CuotaCalculator.CalcularValorCuota(item.MontoTotal!.Value, cantidad, c);
                         eventualItems.Add(new Transaction
                         {
                             Id = item.Id,
@@ -72,22 +154,19 @@ public class TransactionStore : ITransactionStore
                             Monto = montoCuota,
                             Moneda = item.Moneda,
                             Fecha = fechaCuota,
-                            Descripcion = item.Descripcion,
+                            Descripcion = $"Cuota {c}/{cantidad} - {item.Descripcion}",
                             Notas = item.Notas,
                             CategoryId = item.CategoryId,
                             Category = item.Category,
                             MedioPago = item.MedioPago,
                             TarjetaId = item.TarjetaId,
                             Tarjeta = item.Tarjeta,
-                            FechaInicio = item.FechaInicio,
-                            FechaFin = item.FechaFin,
                             MontoTotal = item.MontoTotal,
                             CantidadCuotas = item.CantidadCuotas,
                             CuotasPagadas = item.CuotasPagadas,
                             FechaPrimeraCuota = item.FechaPrimeraCuota,
                             FechaPrimeraCuotaPendiente = item.FechaPrimeraCuotaPendiente,
-                            CreatedAtUtc = item.CreatedAtUtc,
-                            HistorialMontos = item.HistorialMontos
+                            CreatedAtUtc = item.CreatedAtUtc
                         });
                     }
                 }

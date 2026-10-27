@@ -241,7 +241,12 @@ export const Pendientes: React.FC = () => {
                             </span>
                             <span>•</span>
                             <span>
-                              Próxima cuota: <strong className="text-text-secondary">Noviembre 2026</strong>
+                              Próxima cuota:{' '}
+                              <strong className="text-text-secondary capitalize">
+                                {item.fechaPrimeraCuotaPendiente
+                                  ? formatMonthYearAR(item.fechaPrimeraCuotaPendiente)
+                                  : 'Al día'}
+                              </strong>
                             </span>
                             <span>•</span>
                             <span>Total compra: {formatCurrencyARS(item.montoTotal)}</span>

@@ -109,3 +109,14 @@ export function formatMonthYearAR(periodo: string | Date): string {
 
   return `${meses[month] || ''} ${year}`;
 }
+
+/**
+ * Devuelve el primer día del mes siguiente en formato YYYY-MM-DD
+ */
+export function getNextMonthFirstDayString(baseDateStr?: string): string {
+  const base = baseDateStr ? new Date(`${baseDateStr.slice(0, 10)}T00:00:00`) : new Date();
+  const nextMonth = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+  const year = nextMonth.getFullYear();
+  const month = String(nextMonth.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
+}
